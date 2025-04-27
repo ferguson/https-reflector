@@ -39,10 +39,10 @@ Options:
 # Setting up the HTTPS Reflector Server
 
 The server is designed to typically run with an HTTPS wildcard
-certificate and DNS configured to route all subdmains (or "vhosts"
-as the code refers to them) to the server. You can choose to run
+certificate and DNS configured to route all subdomains, or "vhosts"
+(as the code refers to them), to the server. You can choose to run
 without HTTPS and/or without subdomains. If you don't have subdomains
-than it will only support a single device per server.
+then it will only support a single device per server.
 
 You should find all occurrences of `some-https-reflector-server.org`
 in the code and `run.sh` and swap in your own domain name. This really
@@ -51,7 +51,7 @@ should be extracted out to a config file or command arguments
 
 The `.mjs` file extensions, the `--expermential-modules` flag for
 `node`, and the weird `import` statements workarounds in the code are
-all to support running this on an old version of node (v11.15.0).That
+all to support running this on an old version of node (v11.15).That
 was the newest version of node I could run on one of the devices I
 needed to support. It can, and has, run just fine on newer versions of
 node.
