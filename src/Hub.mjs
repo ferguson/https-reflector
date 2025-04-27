@@ -6,11 +6,11 @@ import { freeParser } from '_http_common';
 import WebSocketStream from 'websocket-stream';
 //import { WebSocketServer, createWebSocketStream } from 'ws';
 import WS from 'ws';
-const WebSocketServer = WS.WebSocketServer;  // this is probably wrong FIXME
-const createWebSocketStream = WS.createWebSocketStream;  // this is probably wrong FIXME
+const WebSocketServer = WS.WebSocketServer;
+const createWebSocketStream = WS.createWebSocketStream;
 //import { Server as SocketIOServer } from 'socket.io';
 import socket_io from 'socket.io';
-const SocketIOServer = socket_io.Server;  // this is probably wrong FIXME
+const SocketIOServer = socket_io.Server;
 
 import HubWSPool from './HubWSPool.mjs';
 import ConnectorManager from './ConnectorManager.mjs';

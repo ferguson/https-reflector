@@ -1,11 +1,11 @@
 import os from 'os';
 import { EventEmitter } from 'events';
 //import { Command as Commander } from 'commander';
-import c from 'commander';  // this is probably wrong FIXME
-const Commander = c.Command;
+import C from 'commander';
+const Commander = C.Command;
 //import { toSnake } from 'snake-camel';
-import SnakeCamel from 'snake-camel';
-const toSnake = SnakeCamel.toSnake;  // this is probably wrong FIXME
+import snake_Camel from 'snake-camel';
+const toSnake = snake_Camel.toSnake;
 import { HubUplinkClient } from '../API.mjs';
 
 const log = console;

@@ -1,5 +1,9 @@
-import { Command as Commander } from 'commander';
-import { toSnake } from 'snake-camel';
+//import { Command as Commander } from 'commander';
+import C from 'commander';
+const Commander = C.Command;
+//import { toSnake } from 'snake-camel';
+import snake_Camel from 'snake-camel';
+const toSnake = snake_Camel.toSnake;
 
 import { WebServer } from '../API.mjs';
 
