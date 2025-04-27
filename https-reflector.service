@@ -1,0 +1,13 @@
+[Unit]
+Description=https-reflector
+After=network.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=1
+ExecStart=/usr/local/https-reflector/run.sh
+
+[Install]
+WantedBy=multi-user.target

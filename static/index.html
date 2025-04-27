@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>HTTPS Reflector</title>
+    <style>
+      body {
+        margin: 0;
+        width: 100vw;
+        height: 100vh;
+        font-family: Verdana, "Helvetica Neue", Helvetica, Arial, sans-serif;
+        color: #BF6F04;
+        background-color: #333333;
+        /* Improved handling of kerning pairs and ligatures in modern browsers */
+        /* http://aestheticallyloyal.com/public/optimize-legibility/ */
+        text-rendering: optimizeLegibility;
+      }
+      nav {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        z-index: 999;
+        background-color: transparent;
+      }
+      section {
+        width: 100%;
+        text-align: center;
+      }
+      iframe {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        border: 0;
+      }
+      #status {
+        /*color: #222;*/
+        color: black;
+      }
+    </style>               
+</head>
+
+<body>
+  <br>
+  <br>
+  <br>
+  <br>
+  <br>
+  <center><h2>Waiting for device to come online</h2></center>
+  <br>
+  <br>
+  <center><h4><div id='status'></div></h4></center>
+
+  <script>
+    let protocol = 'ws:';
+    console.log('w.l.p', window.location.protocol);
+    if (window.location.protocol === 'https:') {
+        protocol = 'wss:';
+    }
+    let ws = new WebSocket(`${protocol}//${window.location.host}/otto-hub/status.ws`);
+    ws.addEventListener('message', async (message) => {
+        let json = await message.data.text();
+        console.debug('typeof message.data', typeof message.data);
+        console.debug('message.data', message.data);
+        console.debug('typeof json', typeof json);
+        console.debug('ws message', json);
+        let data;
+
+        try {
+            data = JSON.parse(json);
+        } catch(err) {
+            console.error('error parsing json from', json, err);
+        }
+        console.debug('data', data);
+
+        let status = data || {};
+        console.log('status.idle_pool_size', status.idle_pool_size);
+        console.log('status.idle_pool_size > 0', status.idle_pool_size > 0);
+        if (status.idle_pool_size > 0) {
+            console.log('reloading');
+            window.location.reload();
+        }
+        
+        // let status_div = document.querySelector('#status');
+        // if (status_div) {
+        //     let n = data.idle_pool_size;
+        //     status_div.textContent = `${n} tunnel${n === 1 ? '' : 's'}`;
+        // }
+    });
+  </script>
+</body>
+<html>
