@@ -104,13 +104,14 @@ requires that you add a few entries to your `/etc/hosts` file:
 
 Run `./dev.sh` in one terminal window, and then run the client in another window:
 
-``` node --experimental-modules https-reflector-client.mjs --hub "http://*.localreflector" --host 10.99.0.70 --port 80 --devicename woot
+```
+node --experimental-modules https-reflector-client.mjs --hub "http://*.localreflector" --host 10.99.0.70 --port 80 --devicename woot
 ```
 
 Adjust the IP address and port number to point to a web page
 on one of your devices, or a local server on your laptop.
 
-The output from that should be:
+The output should be:
 ```
 using device name woot
 attempting an uplink connection to http://woot.localreflector/
@@ -125,7 +126,7 @@ local browser (must be on the same machine).
 You can optionally run one or two more additional clients
 for more devices using the devicenames `fruit` and `toot`.
 
-# Standalone clients vs. embedding
+# Stand-alone clients vs. embedding
 
 If your device is already running node to support the web interface,
 you can include this module in your node code and avoid running a
