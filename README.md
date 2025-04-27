@@ -51,9 +51,10 @@ should be extracted out to a config file or command arguments
 
 The `.mjs` file extensions, the `--expermential-modules` flag for
 `node`, and the weird `import` statements workarounds in the code are
-all to support running this on an old version of node: v11.15.0. This
-is because that was the newest version of node I could run on one of
-the devices I needed to support.
+all to support running this on an old version of node (v11.15.0).That
+was the newest version of node I could run on one of the devices I
+needed to support. It can, and has, run just fine on newer versions of
+node.
 
 Lookover `run.sh`, see if you need to change anything in there and
 then `./run.sh` to launch the server. There is also an example
@@ -122,3 +123,34 @@ Then you should be able to go to `http://woot.localreflector/` in your local bro
 
 You can optionally run additional clinets one or two more
 times for more devices using the devicenames `fruit` and `toot`.
+
+# Standalone clients vs. embedding
+
+If your device is already running node to support the web interface, you can include this module in your node code and avoide running a separate reflector client process.
+
+That would look something like this:
+```
+import os from 'os';
+import { HubUplinkClient } from 'https-reflector';
+
+export default async function main(argv) {
+    // ... code to setup your web server here
+
+    let devicename = os.hostname().split('.')[0];  // if your hostnames are unique enough
+    let hub_url = 'https://*.some-https-reflector-server.org';
+    let uplink_client_options = {
+        uplink_to_host: 'localhost',
+        uplink_to_port: '9090',  // or whatever port your webserver above runs on
+    };
+
+    let hubUplinkClient = new HubUplinkClient(hub_url, uplink_client_options);
+    await hubUplinkClient.init(devicename);
+}
+```
+
+This means the client running in the same process as your web server
+will be making an http request to itself to proxy the traffic. There
+should be a way to skip this extra hop and just integrate the incoming
+request into the http processing stack making things more efficent. I
+made a half-harted attempt at this but did not succeed yet. The
+current method works quite well, so good enough for now.
