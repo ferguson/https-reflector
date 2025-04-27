@@ -119,14 +119,17 @@ hub says to proceed
 https-reflector server http://woot.localreflector/ connected
 ```
 
-Then you should be able to go to `http://woot.localreflector/` in your local browser (must be on the same machine).
+Then you should be able to go to `http://woot.localreflector/` in your
+local browser (must be on the same machine).
 
-You can optionally run additional clinets one or two more
-times for more devices using the devicenames `fruit` and `toot`.
+You can optionally run one or two more additional clients
+for more devices using the devicenames `fruit` and `toot`.
 
 # Standalone clients vs. embedding
 
-If your device is already running node to support the web interface, you can include this module in your node code and avoide running a separate reflector client process.
+If your device is already running node to support the web interface,
+you can include this module in your node code and avoid running a
+separate reflector client process.
 
 That would look something like this:
 ```
@@ -152,5 +155,5 @@ This means the client running in the same process as your web server
 will be making an http request to itself to proxy the traffic. There
 should be a way to skip this extra hop and just integrate the incoming
 request into the http processing stack making things more efficent. I
-made a half-harted attempt at this but did not succeed yet. The
+made a half-hearted attempt at this but did not succeed yet. The
 current method works quite well, so good enough for now.
