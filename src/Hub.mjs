@@ -9,7 +9,7 @@ import WS from 'ws';
 const WebSocketServer = WS.WebSocketServer;
 const createWebSocketStream = WS.createWebSocketStream;
 //import { Server as SocketIOServer } from 'socket.io';
-import socket_io from 'socket.io';
+import * as socket_io from 'socket.io';
 const SocketIOServer = socket_io.Server;
 
 import HubWSPool from './HubWSPool.mjs';
