@@ -759,7 +759,7 @@ simple-update-notifier@^2.0.0:
   dependencies:
     semver "^7.5.3"
 
-snake-camel@^1.0.8:
+snake-camel@^1.0.9:
   version "1.0.9"
   resolved "https://registry.yarnpkg.com/snake-camel/-/snake-camel-1.0.9.tgz#35b1fdae042d734c9f8485976fe31de15ba8540e"
   integrity sha512-2HDmt3MXa6oJMNenrIJelis4cVrvxbOg3vnTAM+59T0vHSBynEMm/puHhgqcxvJ5rXzfWjjgHifJV/SJTOQRkw==
