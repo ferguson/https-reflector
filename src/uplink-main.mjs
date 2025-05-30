@@ -11,14 +11,14 @@ import { HubUplinkClient } from '../API.mjs';
 const log = { ...console };
 
 const usage = `
-  --hub <url>            - https-reflector server url
+  --reflector <url>            - https-reflector server url
   --host <hostname>      - hostname of local server to uplink to (default localhost)
   --port <number>        - port to uplink to (default 9090)
   --devicename <name>    - unique device name to use (defaults to hostname)
 `;
 
 const defaults = {
-    hub: 'https://woot.localreflector:7887',
+    reflector: 'https://woot.localreflector:7887',
     host: 'localhost',
     port: 9090,
 };
@@ -28,7 +28,7 @@ export default async function main() {
     let options = parseArgs(usage, defaults);
     //log.debug(options);
 
-    let hub_url = options.hub;
+    let reflector_url = options.reflector;
 
     let uplink_client_options = {
         uplink_to_host: options.host,
@@ -36,7 +36,7 @@ export default async function main() {
     };
     let devicename = options.devicename || os.hostname().split('.')[0];
     console.log(`using device name ${devicename}`);
-    let hubUplinkClient = new HubUplinkClient(hub_url, uplink_client_options);
+    let hubUplinkClient = new HubUplinkClient(reflector_url, uplink_client_options);
     await hubUplinkClient.init(devicename);
     log.debug('https-reflector client ready');
 }
