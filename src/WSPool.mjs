@@ -29,16 +29,16 @@ export default class WSPool extends EventEmitter {
         log.debug('addOne: added to pool', this.pool.size, this.waiting_queue.length);
 
         ws.on('error', (err) => {
-            log.warn('wsstream error', err.code);
+            log.warn('https-reflector ws error', err);
             this.terminateOne(ws);
         });
         ws.socket.on('error', (err) => {
-            log.warn('ws error', err.code);
+            log.warn('https-reflector ws socket error', error);
             this.terminateOne(ws);
         });
 
         ws.on('close', () => {
-            log.debug('wsstream close');
+            log.debug('https-reflector ws close');
             this.releaseOne();
         });
 
