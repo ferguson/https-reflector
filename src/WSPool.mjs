@@ -33,7 +33,7 @@ export default class WSPool extends EventEmitter {
             this.terminateOne(ws);
         });
         ws.socket.on('error', (err) => {
-            log.warn('https-reflector ws socket error', error);
+            log.warn('https-reflector ws socket error', err);
             this.terminateOne(ws);
         });
 
