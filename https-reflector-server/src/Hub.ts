@@ -10,11 +10,11 @@ import { WebSocketServer, createWebSocketStream } from 'ws';
 //const createWebSocketStream = WS.createWebSocketStream;
 import { Server as SocketIOServer } from 'socket.io';
 
+import { HeaderBlock } from 'https-reflector-client';
 import { HubWSPool } from './API';
 import { ConnectorManager } from './API';
-import { HeaderBlock } from './API';
 
-const log = Object.assign({}, console);
+const log = {...console};
 log.debug = ()=>{};
 
 const STATIC_DIR = __dirname + '/../static';

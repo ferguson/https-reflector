@@ -2,7 +2,9 @@
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 cd $DIR || (echo "error!"; exit 1)
+cd ..
 source ./activate
+cd -
 
 export HTTPS_REFLECTOR_PUBLIC_STATIC_DIR=/var/www/some-https-reflector-server.org
 

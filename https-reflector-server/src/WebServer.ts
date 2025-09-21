@@ -6,7 +6,7 @@ import express = require('express');
 
 import Hub from './Hub';
 
-const log = Object.assign({}, console);
+const log = {...console};
 log.debug = ()=>{};
 
 //import { fileURLToPath } from 'url';

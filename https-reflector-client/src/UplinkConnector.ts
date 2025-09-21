@@ -4,7 +4,7 @@ import io_client = require('socket.io-client');
 
 import UplinkWSPool from './UplinkWSPool';
 
-const log = Object.assign(console, {});
+const log = {...console};
 log.debug = ()=>{};
 
 const HEARTBEAT_INTERVAL_MS = 10 * 1000;  // 10 seconds

@@ -1,6 +1,6 @@
-import WSPool from './API';
+import { WSPool } from 'https-reflector-client';
 
-const log = Object.assign({}, console);
+const log = {...console};
 log.debug = ()=>{};
 
 const WAITING_QUEUE_MAX = 50;

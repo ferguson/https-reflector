@@ -1,6 +1,6 @@
-import UplinkConnector = require('./UplinkConnector');
+import UplinkConnector from './UplinkConnector';
 
-const log = Object.assign(console, {});
+const log = {...console};
 
 const DEFAULT_UPLINK_TO_HOST = 'localhost';
 const DEFAULT_UPLINK_TO_PORT = 9090;

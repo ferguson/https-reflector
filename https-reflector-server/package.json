@@ -11,13 +11,13 @@
   "private": true,
   "main": "build/API.js",
   "scripts": {
-    "build": "tsc 2>&1 | egrep -v '^node_modules/(socket[.]io|[@]socket[.]io|socket[.]io-client|engine[.]io-client)/'"
+    "build": "rm -rf build; tsc 2>&1 | egrep -v 'node_modules/(socket[.]io|[@]socket[.]io|socket[.]io-client|engine[.]io-client)/'"
   },
   "dependencies": {
     "commander": "^7",
     "express": "^4.18.2",
     "express-async-handler": "^1.2.0",
-    "node-fetch": "^2",
+    "https-reflector-client": "^2.0.0",
     "pump": "^3.0.0",
     "serve-favicon": "^2.5.0",
     "snake-camel": "^1.0.9",
@@ -29,6 +29,6 @@
   "devDependencies": {
     "@types/node": "6.0.94",
     "nodemon": "^3.1.3",
-    "typescript": "2.5.3"
+    "typescript": "^2.7"
   }
 }

@@ -7,7 +7,7 @@ import { toSnake } from 'snake-camel';
 
 import { WebServer } from './API';
 
-const log = console;
+const log = {...console};
 
 const usage = `
   --hostname <hostname>  - the external host name of the server (required)

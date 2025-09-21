@@ -5,10 +5,10 @@ import { toSnake } from 'snake-camel';
 
 import { HubUplinkClient } from './API';
 
-const log = { ...console };
+const log = {...console};
 
 const usage = `
-  --reflector <url>            - https-reflector server url
+  --reflector <url>      - https-reflector server url
   --host <hostname>      - hostname of local server to uplink to (default localhost)
   --port <number>        - port to uplink to (default 9090)
   --devicename <name>    - unique device name to use (defaults to hostname)

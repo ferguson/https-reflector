@@ -8,6 +8,7 @@
     "strict": false,
     "strictNullChecks": false,
     "forceConsistentCasingInFileNames": true,
+    "esModuleInterop": true,
     "moduleResolution": "node",
     "isolatedModules": false,
     "outDir": "build",

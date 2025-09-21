@@ -6,7 +6,7 @@ import { PassThrough } from 'stream';
 
 import HeaderBlock from './HeaderBlock';
 
-const log = Object.assign({}, console);
+const log = {...console};
 
 
 export default class UplinkWS {

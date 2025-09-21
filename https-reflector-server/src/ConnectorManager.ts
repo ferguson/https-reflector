@@ -1,6 +1,6 @@
 import HubWSPool from './HubWSPool';
 
-const log = Object.assign({}, console);
+const log = {...console};
 
 //const MAX_UPLINK_POOL_SIZE = 30;
 

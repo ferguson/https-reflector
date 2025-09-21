@@ -1,7 +1,7 @@
 import WSPool from './WSPool';
 import UplinkWS from './UplinkWS';
 
-const log = Object.assign({}, console);
+const log = {...console};
 log.debug = ()=>{};
 
 const DEFAULT_POOL_SIZE = 10;

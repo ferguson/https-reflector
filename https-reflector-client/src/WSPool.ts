@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events';
 
-const log = Object.assign({}, console);
+const log = {...console};
 log.debug = ()=>{};
 
 const HEARTBEAT_INTERVAL_MS = 30 * 1000;
