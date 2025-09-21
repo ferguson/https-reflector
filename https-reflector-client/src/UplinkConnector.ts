@@ -1,8 +1,8 @@
 import { EventEmitter } from 'events';
-import WebSocket from 'ws';
-import io_client from 'socket.io-client';
+import WebSocket = require('ws');
+import io_client = require('socket.io-client');
 
-import UplinkWSPool from './UplinkWSPool.mjs';
+import UplinkWSPool from './UplinkWSPool';
 
 const log = Object.assign(console, {});
 log.debug = ()=>{};

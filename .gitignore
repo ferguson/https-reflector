@@ -4,3 +4,5 @@ node_modules
 /activate
 /virtualize
 /virtualize-node
+/https-redirector-client/build
+/https-redirector-server/build

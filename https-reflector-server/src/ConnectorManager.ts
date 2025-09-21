@@ -1,4 +1,4 @@
-import HubWSPool from './HubWSPool.mjs';
+import HubWSPool from './HubWSPool';
 
 const log = Object.assign({}, console);
 

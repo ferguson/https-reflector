@@ -1,10 +1,10 @@
-import net from 'net';
-import pump from 'pump';
-import WebSocketStream from 'websocket-stream';
+import net = require('net');
+import pump = require('pump');
+import WebSocketStream = require('websocket-stream');
 // import WebSocket, { createWebSocketStream } from 'ws';
 import { PassThrough } from 'stream';
 
-import HeaderBlock from './HeaderBlock.mjs';
+import HeaderBlock from './HeaderBlock';
 
 const log = Object.assign({}, console);
 

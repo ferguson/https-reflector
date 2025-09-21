@@ -1,5 +1,5 @@
-import WSPool from './WSPool.mjs';
-import UplinkWS from './UplinkWS.mjs';
+import WSPool from './WSPool';
+import UplinkWS from './UplinkWS';
 
 const log = Object.assign({}, console);
 log.debug = ()=>{};

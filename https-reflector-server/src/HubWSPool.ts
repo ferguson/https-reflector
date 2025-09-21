@@ -1,4 +1,4 @@
-import WSPool from './WSPool.mjs';
+import WSPool from './API';
 
 const log = Object.assign({}, console);
 log.debug = ()=>{};

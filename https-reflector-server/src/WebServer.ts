@@ -1,17 +1,17 @@
-import fs from 'fs';
-import http from 'http';
-import https from 'https';
-import express from 'express';
-//import asyncHandler from 'express-async-handler';
+import fs = require('fs');
+import http = require('http');
+import https = require('https');
+import express = require('express');
+//import asyncHandler = require('express-async-handler');
 
-import Hub from './Hub.mjs';
+import Hub from './Hub';
 
 const log = Object.assign({}, console);
 log.debug = ()=>{};
 
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
-const __dirname = dirname(fileURLToPath(import.meta.url));
+//import { fileURLToPath } from 'url';
+//import { dirname } from 'path';
+//const __dirname = dirname(fileURLToPath(import.meta.url));
 const STATIC_DIR = process.env.HTTPS_REFLECTOR_PUBLIC_STATIC_DIR || __dirname + '/../static';
 
 const DEFAULT_CERTIFICATE_DIR  = '/etc/letsencrypt/live/some-https-reflector-server.org';

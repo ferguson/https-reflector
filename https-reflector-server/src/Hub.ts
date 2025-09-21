@@ -1,27 +1,22 @@
-import http from 'http';
-import pump from 'pump';
-import express from 'express';
-import { freeParser } from '_http_common';
+import http = require('http');
+import pump = require('pump');
+import * as express from 'express';
+import _http_common = require('_http_common');
 //import asyncHandler from 'express-async-handler';
-import WebSocketStream from 'websocket-stream';
-//import { WebSocketServer, createWebSocketStream } from 'ws';
-import WS from 'ws';
-const WebSocketServer = WS.WebSocketServer;
-const createWebSocketStream = WS.createWebSocketStream;
-//import { Server as SocketIOServer } from 'socket.io';
-import * as socket_io from 'socket.io';
-const SocketIOServer = socket_io.Server;
+import WebSocketStream = require('websocket-stream');
+import { WebSocketServer, createWebSocketStream } from 'ws';
+//import WS from 'ws';
+//const WebSocketServer = WS.WebSocketServer;
+//const createWebSocketStream = WS.createWebSocketStream;
+import { Server as SocketIOServer } from 'socket.io';
 
-import HubWSPool from './HubWSPool.mjs';
-import ConnectorManager from './ConnectorManager.mjs';
-import { buildHeaderBlockString } from './HeaderBlock.mjs';
+import { HubWSPool } from './API';
+import { ConnectorManager } from './API';
+import { HeaderBlock } from './API';
 
 const log = Object.assign({}, console);
 log.debug = ()=>{};
 
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
-const __dirname = dirname(fileURLToPath(import.meta.url));
 const STATIC_DIR = __dirname + '/../static';
 
 
@@ -135,7 +130,7 @@ export default class Hub {
 
     upstreamRequestHandler(devicename, req, res) {
         // pass the request on to the hub node
-        freeParser(req.socket.parser, req, req.socket);
+        _http_common.freeParser(req.socket.parser, req, req.socket);
         res.detachSocket(res.socket);
 
         this.handOffToUpstreamSocket(devicename, req);
@@ -183,7 +178,7 @@ export default class Hub {
             //'cache-control: no-cache'?
         } else {
             // upgrade requests
-            header_block_string = buildHeaderBlockString(req.rawHeaders, false);
+            header_block_string = HeaderBlock.buildHeaderBlockString(req.rawHeaders, false);
         }
 
         let socket = req.socket;

@@ -1,4 +1,4 @@
-import UplinkConnector from './UplinkConnector.mjs';
+import UplinkConnector = require('./UplinkConnector');
 
 const log = Object.assign(console, {});
 

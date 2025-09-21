@@ -1,12 +1,9 @@
-import os from 'os';
+import os = require('os');
 import { EventEmitter } from 'events';
-//import { Command as Commander } from 'commander';
-import * as C from 'commander';
-const Commander = C.Command;
-//import { toSnake } from 'snake-camel';
-import * as snake_Camel from 'snake-camel';
-const toSnake = snake_Camel.toSnake;
-import { HubUplinkClient } from '../API.mjs';
+import { Command as Commander } from 'commander';
+import { toSnake } from 'snake-camel';
+
+import { HubUplinkClient } from './API';
 
 const log = { ...console };
 

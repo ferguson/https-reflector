@@ -5,4 +5,4 @@ cd $DIR || (echo "error!"; exit 1)
 source ./activate
 
 echo "starting https-reflector client"
-exec node --experimental-modules ./https-reflector-client.mjs --hub="https://*.mitlivinglab.org" --host=10.99.0.44 --port=8001
+exec node ./https-reflector-client.js --hub="https://*.mitlivinglab.org" --host=localhost --port=8001

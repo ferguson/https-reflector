@@ -1,6 +1,4 @@
-//import { Headers } from 'node-fetch';
-import NodeFetch from 'node-fetch';
-const Headers = NodeFetch.Headers;
+import { Headers } from 'node-fetch';
 
 const log = console;
 const MAX_HEADERS_BLOCK_SIZE = 8192;
@@ -137,27 +135,26 @@ export default class HeaderBlock {
     toHeadersObj() {
         return this.headers;
     }
-}
 
-
-export function buildHeaderBlockString(raw_headers, suppress_connection=false) {
-    let header_block_string = '';
-    let skip_next = false;
-    for (let i in raw_headers) {
-        if (skip_next) {
-            skip_next = false;
-            continue;
-        }
-        let entry = raw_headers[i];
-        if (i % 2 === 0) {
-            if (suppress_connection && entry.toLowerCase() === 'connection') {
-                skip_next = true;
-                continue;
-            }
-            header_block_string += entry + ': ';
-        } else {
-            header_block_string += entry + '\r\n';
-        }
-    }
-    return header_block_string;
+  static buildHeaderBlockString(raw_headers, suppress_connection=false) {
+      let header_block_string = '';
+      let skip_next = false;
+      for (let i in raw_headers) {
+          if (skip_next) {
+              skip_next = false;
+              continue;
+          }
+          let entry = raw_headers[i];
+          if (i % 2 === 0) {
+              if (suppress_connection && entry.toLowerCase() === 'connection') {
+                  skip_next = true;
+                  continue;
+              }
+              header_block_string += entry + ': ';
+          } else {
+              header_block_string += entry + '\r\n';
+          }
+      }
+      return header_block_string;
+  }
 }

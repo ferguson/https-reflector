@@ -1,6 +1,6 @@
 #!/bin/bash
 
-export VIRTUALIZE_NODE_VERSION=11.15.0
+export VIRTUALIZE_NODE_VERSION=24.8.0
 
 ## install git submodules
 #git submodule init
