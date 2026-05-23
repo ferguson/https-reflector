@@ -7,11 +7,12 @@ COPY . /https-reflector
 RUN cd /https-reflector/https-reflector-client && yarn install
 RUN cd /https-reflector/https-reflector-server && yarn install
 
-# Build client (TypeScript → CommonJS ES2015, exits 0)
+# Both packages: tsc exits non-zero due to socket.io .d.ts parse errors in TypeScript 2.9.2,
+# but output files are still emitted. Use ; (not &&) to ignore exit code, then verify output.
 RUN cd /https-reflector/https-reflector-client && \
-    node_modules/.bin/tsc -p tsconfig.json
+    node_modules/.bin/tsc -p tsconfig.json 2>&1; \
+    test -f build/API.js
 
-# Build server (tsc exits non-zero due to socket.io .d.ts parse noise, but files are emitted)
 RUN cd /https-reflector/https-reflector-server && \
     node_modules/.bin/tsc -p tsconfig.json 2>&1; \
     test -f build/main.js
