@@ -32,6 +32,9 @@ if [ -n "$STATUS_PASSWORD" ]; then
     ARGS+=(-e HTTPS_REFLECTOR_STATUS_PASSWORD="$STATUS_PASSWORD")
 fi
 
-docker run "${ARGS[@]}" https-reflector
-
-echo "https-reflector started"
+if docker run "${ARGS[@]}" https-reflector; then
+    echo "https-reflector started"
+else
+    echo "error: docker run failed" >&2
+    exit 1
+fi
