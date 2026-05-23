@@ -1,6 +1,7 @@
-import UplinkConnector from './UplinkConnector.mjs';
+import UplinkConnector from './UplinkConnector';
+import { HubUplinkClientOptions, UplinkConnectorOptions } from './types';
 
-const log = Object.assign(console, {});
+const log = {...console};
 
 const DEFAULT_UPLINK_TO_HOST = 'localhost';
 const DEFAULT_UPLINK_TO_PORT = 9090;
@@ -9,7 +10,13 @@ const DEBOUNCE_TIMEOUT_MS = 1000;
 
 
 export default class HubUplinkClient {
-    constructor(hub_url, options) {
+    hub_url: string;
+    connector_options: UplinkConnectorOptions;
+    timeout: NodeJS.Timeout | null;
+    devicename: string | null;
+    uplink_connector: UplinkConnector | null;
+
+    constructor(hub_url: string, options: HubUplinkClientOptions) {
         this.hub_url = hub_url;
         this.connector_options = {
             pool_size: POOL_SIZE,
@@ -18,17 +25,19 @@ export default class HubUplinkClient {
             uplink_to_port: options.uplink_to_port || DEFAULT_UPLINK_TO_PORT,
         };
         this.timeout = null;
+        this.devicename = null;
+        this.uplink_connector = null;
     }
 
 
-    async init(devicename=null) {
+    async init(devicename: string = null): Promise<void> {
         if (devicename) {
             await this.startConnector(devicename);
         }
     }
 
 
-    setDevicename(devicename) {
+    setDevicename(devicename: string): void {
         if (devicename !== this.devicename) {
             if (devicename) {
                 this.stopConnector();
@@ -41,7 +50,7 @@ export default class HubUplinkClient {
     }
 
 
-    async startConnector(devicename) {
+    async startConnector(devicename: string): Promise<void> {
         let url = new URL(this.hub_url);
         if (url.hostname.startsWith('*.')) {
             url.hostname = url.hostname.replace('*', devicename);  // prepend the devicename as a "vhost"
@@ -61,7 +70,7 @@ export default class HubUplinkClient {
     }
 
 
-    stopConnector() {
+    stopConnector(): void {
         if (this.uplink_connector) {
             this.uplink_connector.disconnect();
             delete this.uplink_connector;

@@ -21,7 +21,7 @@ You can test the install:
 ```
 source ./activate
 node --version  # should be v11.15.0
-node --experimental-modules https-reflector-client.mjs --help
+node https-reflector-client.js --help
 ```
 
 You should see:
@@ -49,12 +49,10 @@ in the code and `run.sh` and swap in your own domain name. This really
 should be extracted out to a config file or command arguments
 (someday).
 
-The `.mjs` file extensions, the `--expermential-modules` flag for
-`node`, and the weird `import` statements workarounds in the code are
-all to support running this on an old version of node (v11.15).That
-was the newest version of node I could run on one of the devices I
-needed to support. It can, and has, run just fine on newer versions of
-node.
+This code is using an old version of Typescript and compies down to and ES2015
+target to support running on an old version of node (v6.9). That
+is to enable it to run on a certain device that I have to support a large
+number of. It can, and has, run just fine on newer versions of node.
 
 Lookover `run.sh`, see if you need to change anything in there and
 then `./run.sh` to launch the server. There is also an example
@@ -68,7 +66,7 @@ You can also run a test server in dev mode locally on your laptop (see below).
 When you have a server available you can then run the client:
 
 ```
-node --experimental-modules https-reflector-client.mjs --devicename air-solvent --host 10.99.0.70 --port 80 --hub "https://*.some-https-reflector-server.org"
+node https-reflector-client.js --devicename air-solvent --host 10.99.0.70 --port 80 --hub "https://*.some-https-reflector-server.org"
 ```
 
 That should look something like this:
@@ -105,7 +103,7 @@ requires that you add a few entries to your `/etc/hosts` file:
 Run `./dev.sh` in one terminal window, and then run the client in another window:
 
 ```
-node --experimental-modules https-reflector-client.mjs --hub "http://*.localreflector" --host 10.99.0.70 --port 80 --devicename woot
+node https-reflector-client.js --hub "http://*.localreflector" --host 10.99.0.70 --port 80 --devicename woot
 ```
 
 Adjust the IP address and port number to point to a web page

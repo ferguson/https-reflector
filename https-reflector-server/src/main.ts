@@ -1,13 +1,13 @@
-//import { Command as Commander } from 'commander';
-import C from 'commander';
-const Commander = C.Command;
-//import { toSnake } from 'snake-camel';
-import snake_Camel from 'snake-camel';
-const toSnake = snake_Camel.toSnake;
+import { Command as Commander } from 'commander';
+//import C from 'commander';
+//const Commander = C.Command;
+import { toSnake } from 'snake-camel';
+//import snake_Camel from 'snake-camel';
+//const toSnake = snake_Camel.toSnake;
 
-import { WebServer } from '../API.mjs';
+import { WebServer } from './API';
 
-const log = console;
+const log = {...console};
 
 const usage = `
   --hostname <hostname>  - the external host name of the server (required)
@@ -25,7 +25,7 @@ const usage = `
 `;
 
 const defaults = {
-};  // see WebServer.mjs for defaults
+};  // see WebServer.ts for defaults
 
 
 export default async function main() {

@@ -1,17 +1,14 @@
-import os from 'os';
+import os = require('os');
 import { EventEmitter } from 'events';
-//import { Command as Commander } from 'commander';
-import * as C from 'commander';
-const Commander = C.Command;
-//import { toSnake } from 'snake-camel';
-import * as snake_Camel from 'snake-camel';
-const toSnake = snake_Camel.toSnake;
-import { HubUplinkClient } from '../API.mjs';
+import { Command as Commander } from 'commander';
+import { toSnake } from 'snake-camel';
 
-const log = { ...console };
+import { HubUplinkClient } from './API';
+
+const log = {...console};
 
 const usage = `
-  --reflector <url>            - https-reflector server url
+  --reflector <url>      - https-reflector server url
   --host <hostname>      - hostname of local server to uplink to (default localhost)
   --port <number>        - port to uplink to (default 9090)
   --devicename <name>    - unique device name to use (defaults to hostname)

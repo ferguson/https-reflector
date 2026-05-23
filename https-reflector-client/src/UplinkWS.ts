@@ -1,34 +1,37 @@
-import net from 'net';
-import pump from 'pump';
-import WebSocketStream from 'websocket-stream';
-// import WebSocket, { createWebSocketStream } from 'ws';
+import net = require('net');
+import stream = require('stream');
+import pump = require('pump');
+import WebSocketStream = require('websocket-stream');
 import { PassThrough } from 'stream';
 
-import HeaderBlock from './HeaderBlock.mjs';
+import HeaderBlock from './HeaderBlock';
+import { UplinkWSOptions } from './types';
 
-const log = Object.assign({}, console);
+const log = {...console};
 
 
-export default class UplinkWS {
-    constructor(hub_uplink_ws_url, options) {
+class UplinkWS {
+    ws: stream.Duplex;
+    hub_uplink_ws_url: string;
+    http_server_injection: any;
+    uplink_to_host: string;
+    uplink_to_port: number;
+
+    constructor(hub_uplink_ws_url: string, options: UplinkWSOptions) {
         this.hub_uplink_ws_url = hub_uplink_ws_url;
         this.http_server_injection = options.http_server_injection;
         this.uplink_to_host = options.uplink_to_host;
         this.uplink_to_port = options.uplink_to_port;
-        let ws = new WebSocketStream(this.hub_uplink_ws_url);
-        // let plain_ws = new WebSocket(this.hub_uplink_ws_url);
-        // let ws = createWebSocketStream(plain_ws, { encoding: 'utf8' });
+        this.ws = new WebSocketStream(this.hub_uplink_ws_url);
 
         // this only works because we write the headers all-at-once on the other end?
-        ws.once('data', (data) => {
-            this.handleData(ws, data);
+        this.ws.once('data', (data: Buffer) => {
+            this.handleData(data);
         });
-
-        return ws;
     }
 
 
-    handleData(ws, data) {
+    handleData(data: Buffer): void {
         let header_block = new HeaderBlock();
         header_block.addFromString(data.toString(), true);
 
@@ -45,7 +48,7 @@ export default class UplinkWS {
             // //log.debug(`headers_string:\n${headers_string}`);
             // pass.write(headers_string);
             pass.write(data);
-            pass.pipe(ws).pipe(pass);
+            pass.pipe(this.ws).pipe(pass);
             //pass.on('data', (data) => { log.debug('pass data', data.toString()) });
             this.http_server_injection.emit('connection', pass);
         } else {
@@ -58,12 +61,20 @@ export default class UplinkWS {
                 let headers_string = header_block.toHeadersString(false);
                 socket.write(headers_string);
                 //socket.pipe(ws).pipe(socket);  // using pump instead
-                pump(pump(ws, socket), ws);
+                pump(pump(this.ws, socket), this.ws, (err) => {
+                    if (err) log.debug('uplink pump error', err.code);
+                });
             });
 
             socket.on('error', (err) => {
                 log.error('loopback socket error', err);
+                this.ws.destroy();
             });
         }
     }
+}
+
+export function createUplinkWS(hub_uplink_ws_url: string, options: UplinkWSOptions): stream.Duplex {
+    const uplinkWS = new UplinkWS(hub_uplink_ws_url, options);
+    return uplinkWS.ws;
 }

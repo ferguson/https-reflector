@@ -1,32 +1,37 @@
-import http from 'http';
-import pump from 'pump';
-import express from 'express';
-import { freeParser } from '_http_common';
+import http = require('http');
+import pump = require('pump');
+import * as express from 'express';
+import _http_common = require('_http_common');
 //import asyncHandler from 'express-async-handler';
-import WebSocketStream from 'websocket-stream';
-//import { WebSocketServer, createWebSocketStream } from 'ws';
-import WS from 'ws';
-const WebSocketServer = WS.WebSocketServer;
-const createWebSocketStream = WS.createWebSocketStream;
-//import { Server as SocketIOServer } from 'socket.io';
-import * as socket_io from 'socket.io';
-const SocketIOServer = socket_io.Server;
+import WebSocketStream = require('websocket-stream');
+import { WebSocketServer, createWebSocketStream } from 'ws';
+//import WS from 'ws';
+//const WebSocketServer = WS.WebSocketServer;
+//const createWebSocketStream = WS.createWebSocketStream;
+import { Server as SocketIOServer } from 'socket.io';
 
-import HubWSPool from './HubWSPool.mjs';
-import ConnectorManager from './ConnectorManager.mjs';
-import { buildHeaderBlockString } from './HeaderBlock.mjs';
+import { HeaderBlock } from 'https-reflector-client';
+import { HubWSPool } from './API';
+import { ConnectorManager } from './API';
+import { WebServerOptions } from './types';
 
-const log = Object.assign({}, console);
+const log = {...console};
 log.debug = ()=>{};
 
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
-const __dirname = dirname(fileURLToPath(import.meta.url));
 const STATIC_DIR = __dirname + '/../static';
 
 
 export default class Hub {
-    constructor(options) {
+    hostname: string;
+    options: WebServerOptions;
+    connector_manager: ConnectorManager;
+    statusPools: Map<string, HubWSPool>;
+    ws_server: WebSocketServer;
+    static_server: any;
+    io_http_server: http.Server;
+    io: SocketIOServer;
+
+    constructor(options: WebServerOptions) {
         this.hostname = options.hostname;
         this.options = options;
         this.connector_manager = new ConnectorManager();
@@ -34,7 +39,7 @@ export default class Hub {
     }
 
 
-    async init() {
+    async init(): Promise<void> {
         this.ws_server = new WebSocketServer(
             { clientTracking: false, noServer: true, perMessageDeflate: false }
         );
@@ -51,7 +56,7 @@ export default class Hub {
     }
 
 
-    requestHandler(devicename, req, res) {
+    requestHandler(devicename: string, req: any, res: any): void {
         if (!req.url.startsWith('/otto-hub')) {
             // a client trying to connect to a device via the reflector
             this.upstreamRequestHandler(devicename, req, res);
@@ -62,7 +67,7 @@ export default class Hub {
     }
 
 
-    upgradeHandler(devicename, req, socket, head) {
+    upgradeHandler(devicename: string, req: any, socket: any, head: any): void {
         let path = req.url;
         log.debug('hub upgradeHandler', path);
         if (!path.startsWith('/otto-hub')) {
@@ -111,7 +116,7 @@ export default class Hub {
     }
 
 
-    async hubInternalRequestHandler(devicename, req, res) {
+    async hubInternalRequestHandler(devicename: string, req: any, res: any): Promise<void> {
         let path = req.url;
         log.log('hubInternalRequest', path);
 
@@ -133,9 +138,9 @@ export default class Hub {
     }
 
 
-    upstreamRequestHandler(devicename, req, res) {
+    upstreamRequestHandler(devicename: string, req: any, res: any): void {
         // pass the request on to the hub node
-        freeParser(req.socket.parser, req, req.socket);
+        _http_common.freeParser(req.socket.parser, req, req.socket);
         res.detachSocket(res.socket);
 
         this.handOffToUpstreamSocket(devicename, req);
@@ -153,7 +158,7 @@ export default class Hub {
     }
 
 
-    upstreamUpgradeRequestHandler(devicename, req, socket, head) {
+    upstreamUpgradeRequestHandler(devicename: string, req: any, socket: any, head: any): void {
         log.debug('hub upstream socket upgrade request', devicename, head.length, req.url);
         if (req.socket !== socket) {
             log.warn('uh-oh, we made a bad assumption. req.socket !== socket');
@@ -167,23 +172,23 @@ export default class Hub {
     }
 
 
-    async handOffToUpstreamSocket(devicename, req, head=null) {
+    async handOffToUpstreamSocket(devicename: string, req: any, head: any = null): Promise<void> {
         let protocol = 'HTTP/1.1';  // might not want to hard code this
         if (req.httpVersion !== '1.1') {
             log.warn('not HTTP/1.1? this might be bad');
         }
         let method_line = `${req.method} ${req.url} ${protocol}`;
-        let header_block_string;
+        let header_block_string: string;
         if (head === null) {
             // requests
-            //header_block_string = buildHeaderBlockString(req.rawHeaders, true);
-            header_block_string = buildHeaderBlockString(req.rawHeaders, false);  // trying this FIXME
+            //header_block_string = HeaderBlock.buildHeaderBlockString(req.rawHeaders, true);
+            header_block_string = HeaderBlock.buildHeaderBlockString(req.rawHeaders, false);  // trying this FIXME
             // // force separate connections for each request
             // header_block_string += 'Connection: close\r\n';
             //'cache-control: no-cache'?
         } else {
             // upgrade requests
-            header_block_string = buildHeaderBlockString(req.rawHeaders, false);
+            header_block_string = HeaderBlock.buildHeaderBlockString(req.rawHeaders, false);
         }
 
         let socket = req.socket;
@@ -195,31 +200,38 @@ export default class Hub {
         log.debug('req.url', req.url);
         let ws = await this.connector_manager.getUplinkWS(devicename);
         if (!ws) {
-            socket.close();
+            socket.destroy();
             return;
         }
         //ws.pipe(socket).pipe(ws);  // using pump instead
-        pump(pump(socket, ws), socket);
+        pump(pump(socket, ws), socket, (err) => {
+            if (err) log.debug('hub pump error', err.code);
+        });
 
-        ws.write(method_line + '\r\n' + header_block_string + '\r\n\r\n');
-        if (head && head.length) {
-            ws.write(head);
+        try {
+            ws.write(method_line + '\r\n' + header_block_string + '\r\n\r\n');
+            if (head && head.length) {
+                ws.write(head);
+            }
+        } catch (err) {
+            log.debug('ws write error in handOff', err.code);
+            socket.destroy();
         }
     }
 
 
-    getHostHeader(req) {
+    getHostHeader(req: any): string {
         let host = req.headers['host'];
         if (Array.isArray(host)) {
             host = host[0];
         }
         return host;
     }
-    getHostnameFromHost(host) {
+    getHostnameFromHost(host: string): string {
         let hostname = host && host.split(':')[0];  // remove port if present
         return hostname;
     }
-    getDevicenameFromHostname(hostname) {
+    getDevicenameFromHostname(hostname: string): string | null {
         let devicename = null;
         if (hostname.endsWith('.'+this.hostname)) {
             let parts = hostname && hostname.split('.', 1);
@@ -229,7 +241,7 @@ export default class Hub {
         }
         return devicename;
     }
-    getDevicenameFromRequest(req) {
+    getDevicenameFromRequest(req: any): string | null {
         let host = this.getHostHeader(req) || this.hostname;
         let hostname = this.getHostnameFromHost(host);
         let devicename = this.getDevicenameFromHostname(hostname);
@@ -237,9 +249,9 @@ export default class Hub {
     }
 
 
-    sendStatusUpdate(devicename, status, wsocket=null) {
+    sendStatusUpdate(devicename: string, status: any, wsocket: any = null): void {
         return;  //FIXME convert status to use socket.io
-        let json;
+        let json: string;
         try {
             json = JSON.stringify(status);
         } catch(err) {
@@ -248,7 +260,7 @@ export default class Hub {
         }
         log.debug('status', status, 'json', json);
 
-        let wsockets;
+        let wsockets: any[];
         if (wsocket) {
             wsockets = [wsocket];  // make it an array
         } else {
@@ -266,7 +278,7 @@ export default class Hub {
     }
 
 
-    getStatusPool(devicename) {
+    getStatusPool(devicename: string): HubWSPool {
         devicename = devicename || this.hostname;
         log.debug('getStatusPool devicename', devicename);
         let pool = this.statusPools.get(devicename);
