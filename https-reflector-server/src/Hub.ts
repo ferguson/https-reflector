@@ -30,6 +30,7 @@ function isHubPath(p: string): boolean {
 
 export default class Hub {
     hostname: string;
+    hostnames: string[];
     options: WebServerOptions;
     connector_manager: ConnectorManager;
     ws_server: WebSocketServer;
@@ -40,8 +41,9 @@ export default class Hub {
     statusServer: StatusServer;
 
     constructor(options: WebServerOptions) {
-        this.hostname = options.hostname;
-        this.options = options;
+        this.hostname  = options.hostname;
+        this.hostnames = options.hostnames || [options.hostname];
+        this.options   = options;
         const dataDir = options.data_dir || DEFAULT_DATA_DIR;
         this.deviceTracker = new DeviceTracker(dataDir);
         this.statusServer = new StatusServer(this.deviceTracker, options.status_password || null);
@@ -237,14 +239,15 @@ export default class Hub {
         return hostname;
     }
     getDevicenameFromHostname(hostname: string): string | null {
-        let devicename = null;
-        if (hostname.endsWith('.'+this.hostname)) {
-            let parts = hostname && hostname.split('.', 1);
-            if (parts && parts.length > 0) {
-                devicename = parts[0];
+        for (const base of this.hostnames) {
+            if (hostname.endsWith('.' + base)) {
+                const parts = hostname.split('.', 1);
+                if (parts && parts.length > 0) {
+                    return parts[0];
+                }
             }
         }
-        return devicename;
+        return null;
     }
     getDevicenameFromRequest(req: any): string | null {
         let host = this.getHostHeader(req) || this.hostname;

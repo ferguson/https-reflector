@@ -1,5 +1,6 @@
 export interface WebServerOptions {
     hostname: string;
+    hostnames?: string[];       // normalized list (no *.), populated by WebServer constructor
     port?: number;
     bind?: string;
     use_https?: boolean;

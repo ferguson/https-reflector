@@ -35,10 +35,13 @@ export default class WebServer {
 
     constructor(options: WebServerOptions) {
         this.options = Object.assign({}, defaults, options);
-        if (this.options.hostname.startsWith('*.')) {
+        // hostname may be a comma-separated list, each optionally prefixed with *.
+        const raw = this.options.hostname.split(',').map((h: string) => h.trim());
+        if (raw.some((h: string) => h.startsWith('*.'))) {
             this.options.use_vhosts = true;
-            this.options.hostname = this.options.hostname.replace('*.', '');
         }
+        this.options.hostnames = raw.map((h: string) => h.replace('*.', ''));
+        this.options.hostname  = this.options.hostnames[0];
     }
 
 

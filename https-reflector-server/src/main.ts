@@ -10,7 +10,8 @@ import { WebServer } from './API';
 const log = {...console};
 
 const usage = `
-  --hostname <hostname>       - the external host name of the server (required)
+  --hostname <hostname>       - domain(s) to serve (required); comma-separated for multiple,
+                                    e.g. "*.otto.stream,*.mitlivinglabs.org"
 
   --port <port>               - override the default port (80 for http, 443 for https)
   --use-https                 - use https
