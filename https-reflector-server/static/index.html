@@ -56,7 +56,7 @@
     if (window.location.protocol === 'https:') {
         protocol = 'wss:';
     }
-    let ws = new WebSocket(`${protocol}//${window.location.host}/otto-hub/status.ws`);
+    let ws = new WebSocket(`${protocol}//${window.location.host}/https-reflector/status.ws`);
     ws.addEventListener('message', async (message) => {
         let json = await message.data.text();
         console.debug('typeof message.data', typeof message.data);
