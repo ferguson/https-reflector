@@ -1,57 +1,156 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Otto Hub</title>
-    <style>
-      body {
-        margin: 0;
-        width: 100vw;
-        height: 100vh;
-        font-family: Verdana, "Helvetica Neue", Helvetica, Arial, sans-serif;
-        color: #BF6F04;
-        background-color: #333333;
-        text-rendering: optimizeLegibility;
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>otto</title>
+  <link rel="icon" href="/images/favicon.png" type="image/png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg:      #333333;
+      --text:    #999999;
+      --accent:  #BF6F04;
+      --subtext: #666666;
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg:      rgb(242, 240, 255);
+        --text:    #686868;
+        --subtext: #999999;
       }
-      nav {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        z-index: 999;
-        background-color: transparent;
-      }
-      section {
-        width: 100%;
-        text-align: center;
-      }
-      iframe {
-        width: 100%;
-        height: 100%;
-        margin: 0;
-        border: 0;
-      }
-    </style>
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+    }
+
+    body {
+      font-family: "Be Vietnam Pro", Helvetica, Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      text-rendering: optimizeLegibility;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      gap: 0;
+      transition: opacity 0.4s ease;
+    }
+
+    body.fading { opacity: 0; }
+
+    .logo {
+      font-size: 48px;
+      font-weight: 300;
+      color: var(--accent);
+      letter-spacing: 0.12em;
+      line-height: 1;
+      margin-bottom: 32px;
+    }
+
+    .device-name {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 10px;
+      letter-spacing: 0.02em;
+    }
+
+    .status-msg {
+      font-size: 14px;
+      font-weight: 300;
+      color: var(--subtext);
+      margin-bottom: 36px;
+    }
+
+    /* ── Pulsing dots ── */
+    .dots {
+      display: flex;
+      gap: 8px;
+    }
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--accent);
+      opacity: 0.3;
+      animation: pulse 1.4s ease-in-out infinite;
+    }
+    .dot:nth-child(2) { animation-delay: 0.2s; }
+    .dot:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes pulse {
+      0%, 80%, 100% { opacity: 0.2; transform: scale(0.85); }
+      40%            { opacity: 0.9; transform: scale(1.1);  }
+    }
+
+    .dots.online .dot {
+      animation: none;
+      opacity: 1;
+      transform: scale(1.1);
+    }
+  </style>
 </head>
-
 <body>
-  <br>
-  <br>
-  <br>
-  <br>
-  <br>
-  <center><h2>Waiting for otto to come online</h2></center>
 
-  <script>
-    var protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    var ws = new WebSocket(protocol + '//' + window.location.host + '/https-reflector/status.ws');
-    ws.addEventListener('message', function(message) {
-        var data;
-        try { data = JSON.parse(message.data); } catch(err) { return; }
-        var devices = data && data.devices;
-        if (devices && Object.keys(devices).some(function(k) { return devices[k].connected; })) {
-            window.location.reload();
-        }
-    });
-  </script>
+<div class="logo">otto</div>
+<div class="device-name" id="device-name"></div>
+<div class="status-msg" id="status-msg">waiting to come online</div>
+<div class="dots" id="dots">
+  <div class="dot"></div>
+  <div class="dot"></div>
+  <div class="dot"></div>
+</div>
+
+<script>
+(function () {
+  var deviceName = window.location.hostname.split('.')[0] || '';
+  if (deviceName) {
+    document.getElementById('device-name').textContent = deviceName;
+  }
+
+  var ws = null;
+  var reconnectTimer = null;
+  var reconnectDelay = 2000;
+  var online = false;
+
+  function connect() {
+    if (online) return;
+    if (ws) { try { ws.close(); } catch(e) {} }
+    var proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
+    ws = new WebSocket(proto + location.host + '/https-reflector/wait.ws');
+
+    ws.onmessage = function (evt) {
+      var data;
+      try { data = JSON.parse(evt.data); } catch(e) { return; }
+      if (data && data.online) {
+        online = true;
+        document.getElementById('status-msg').textContent = 'coming online…';
+        document.getElementById('dots').className = 'dots online';
+        setTimeout(function () {
+          document.body.className = 'fading';
+          setTimeout(function () { window.location.reload(); }, 450);
+        }, 300);
+      }
+    };
+
+    ws.onclose = function () {
+      if (online) return;
+      reconnectTimer = setTimeout(function () {
+        reconnectDelay = Math.min(reconnectDelay * 1.5, 15000);
+        connect();
+      }, reconnectDelay);
+    };
+  }
+
+  connect();
+})();
+</script>
 </body>
 </html>

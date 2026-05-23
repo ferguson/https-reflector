@@ -13,6 +13,7 @@ export default class DeviceTracker {
     devices: Map<string, DeviceRecord>;
     dataDir: string;
     onUpdate: () => void;
+    onConnect: (devicename: string) => void;
     serverStartAt: number;
     private saveTimer: NodeJS.Timeout | null;
 
@@ -20,6 +21,7 @@ export default class DeviceTracker {
         this.dataDir = dataDir;
         this.devices = new Map();
         this.onUpdate = () => {};
+        this.onConnect = () => {};
         this.serverStartAt = Date.now();
         this.saveTimer = null;
     }
@@ -65,6 +67,7 @@ export default class DeviceTracker {
         this.appendEvent({ ts: now, event: 'connect', device: devicename });
         this.save();
         this.onUpdate();
+        this.onConnect(devicename);
     }
 
 

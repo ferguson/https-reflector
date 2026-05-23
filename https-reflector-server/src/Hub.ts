@@ -13,6 +13,7 @@ import { ConnectorManager } from './API';
 import { WebServerOptions } from './types';
 import DeviceTracker from './DeviceTracker';
 import StatusServer from './StatusServer';
+import WaitServer from './WaitServer';
 
 const log = {...console};
 log.debug = ()=>{};
@@ -39,6 +40,7 @@ export default class Hub {
     io: SocketIOServer;
     deviceTracker: DeviceTracker;
     statusServer: StatusServer;
+    waitServer: WaitServer;
 
     constructor(options: WebServerOptions) {
         this.hostname  = options.hostname;
@@ -47,6 +49,7 @@ export default class Hub {
         const dataDir = options.data_dir || DEFAULT_DATA_DIR;
         this.deviceTracker = new DeviceTracker(dataDir);
         this.statusServer = new StatusServer(this.deviceTracker, options.status_password || null);
+        this.waitServer   = new WaitServer(this.deviceTracker);
         this.connector_manager = new ConnectorManager(this.deviceTracker);
     }
 
@@ -119,6 +122,8 @@ export default class Hub {
 //                        this.connector_manager.addConnector(devicename, ws, req);
                     } else if (p === HUB_PREFIX + '/status.ws' || p === LEGACY_HUB_PREFIX + '/status.ws') {
                         this.statusServer.addClient(ws);
+                    } else if (p === HUB_PREFIX + '/wait.ws') {
+                        this.waitServer.addWaiter(devicename, ws);
                     } else {
                         log.error('ignored unknown ws stream path', p);
                     }
