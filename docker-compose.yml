@@ -1,0 +1,13 @@
+services:
+  https-reflector:
+    image: https-reflector:latest
+    restart: unless-stopped
+    ports:
+      - "443:443"
+      - "80:80"
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - /var/www/https-reflector:/var/www/https-reflector
+      - /var/lib/https-reflector:/data
+    env_file:
+      - config.env
