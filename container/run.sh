@@ -3,7 +3,6 @@
 # ── Configuration ────────────────────────────────────────────────────────────
 HOSTNAME="*.otto.stream,*.mitlivinglabs.org"
 CERT_BASE="/etc/letsencrypt/live/otto.stream"
-STATIC_DIR="/var/www/https-reflector"
 DATA_DIR="/var/lib/https-reflector"
 STATUS_PASSWORD=""   # leave blank for no password
 # ─────────────────────────────────────────────────────────────────────────────
@@ -19,7 +18,6 @@ ARGS=(
     -p 443:443
     -p 80:80
     -v /etc/letsencrypt:/etc/letsencrypt:ro
-    -v "$STATIC_DIR":/var/www/https-reflector
     -v "$DATA_DIR":/data
     -e HTTPS_REFLECTOR_HOSTNAME="$HOSTNAME"
     -e HTTPS_REFLECTOR_DATA_DIR=/data

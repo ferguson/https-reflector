@@ -7,7 +7,6 @@ services:
       - "80:80"
     volumes:
       - /etc/letsencrypt:/etc/letsencrypt:ro
-      - /var/www/https-reflector:/var/www/https-reflector
       - /var/lib/https-reflector:/data
     env_file:
       - config.env
