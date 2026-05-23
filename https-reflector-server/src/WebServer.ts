@@ -117,9 +117,9 @@ export default class WebServer {
             if (devicename) {
                 // hub request
                 this.hub.upgradeHandler(devicename, req, socket, head);
-            } else {
-                // regular web site stuff
-                ////this.upgradeHandler(req, socket, head);  // FIXME add socket handling
+            } else if (req.url && (req.url.startsWith('/https-reflector/') || req.url.startsWith('/otto-hub/'))) {
+                // hub-internal WebSocket on the root domain (e.g. status.ws from the dashboard)
+                this.hub.upgradeHandler(null, req, socket, head);
             }
         } else {
             // no vhosts, everything is a hub request
