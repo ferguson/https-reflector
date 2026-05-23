@@ -8,5 +8,6 @@ services:
     volumes:
       - /etc/letsencrypt:/etc/letsencrypt:ro
       - /var/lib/https-reflector:/data
+      - /var/www/otto.stream:/var/www/public:ro
     env_file:
       - config.env

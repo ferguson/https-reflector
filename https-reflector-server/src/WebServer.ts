@@ -13,7 +13,8 @@ log.debug = ()=>{};
 //import { fileURLToPath } from 'url';
 //import { dirname } from 'path';
 //const __dirname = dirname(fileURLToPath(import.meta.url));
-const STATIC_DIR = process.env.HTTPS_REFLECTOR_PUBLIC_STATIC_DIR || __dirname + '/../static';
+const BUILT_IN_STATIC_DIR = __dirname + '/../static';
+const PUBLIC_STATIC_DIR   = process.env.HTTPS_REFLECTOR_PUBLIC_STATIC_DIR || null;
 
 const DEFAULT_CERTIFICATE_DIR  = '/etc/letsencrypt/live/some-https-reflector-server.org';
 
@@ -131,11 +132,10 @@ export default class WebServer {
 
 
     addRoutes(app: express.Application): void {
-        app.use(express.static(STATIC_DIR));
-        // app.get('/', (req, res) => {
-        //     log.log('hello!');
-        //     res.end('hello!');
-        // });
+        // admin dashboard — always served from the built-in static dir, regardless of PUBLIC_STATIC_DIR
+        app.use('/admin', express.static(BUILT_IN_STATIC_DIR + '/admin'));
+        // public-facing static files
+        app.use(express.static(PUBLIC_STATIC_DIR || BUILT_IN_STATIC_DIR));
     }
 
 

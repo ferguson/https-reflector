@@ -4,7 +4,8 @@
 HOSTNAME="*.otto.stream,*.mitlivinglabs.org"
 CERT_BASE="/etc/letsencrypt/live/otto.stream"
 DATA_DIR="/var/lib/https-reflector"
-STATUS_PASSWORD=""   # leave blank for no password
+PUBLIC_DIR="/var/www/otto.stream"   # mounted at /var/www/public inside the container
+STATUS_PASSWORD=""                  # leave blank for no password
 # ─────────────────────────────────────────────────────────────────────────────
 
 docker stop https-reflector 2>/dev/null
@@ -19,7 +20,9 @@ ARGS=(
     -p 80:80
     -v /etc/letsencrypt:/etc/letsencrypt:ro
     -v "$DATA_DIR":/data
+    -v "$PUBLIC_DIR":/var/www/public:ro
     -e HTTPS_REFLECTOR_HOSTNAME="$HOSTNAME"
+    -e HTTPS_REFLECTOR_PUBLIC_STATIC_DIR=/var/www/public
     -e HTTPS_REFLECTOR_DATA_DIR=/data
     -e HTTPS_REFLECTOR_PRIVATE_KEY_FILE="$CERT_BASE/privkey.pem"
     -e HTTPS_REFLECTOR_CERTIFICATE_FILE="$CERT_BASE/cert.pem"

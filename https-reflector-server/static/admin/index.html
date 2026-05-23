@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>HTTPS Reflector Status</title>
+  <style>
+    :root {
+      --bg:       #3A5366;
+      --bg-dark:  #2E4555;
+      --bg-card:  #324d5e;
+      --bg-stale: #2a3f4e;
+      --cyan:     #41B9C3;
+      --cyan-lt:  #96EEF2;
+      --navy:     #0E2446;
+      --gray:     #7a9ab0;
+      --gray-lt:  #CCCCCC;
+      --orange:   #FF621D;
+      --white:    #F9F9F9;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--white);
+      font-size: 15px;
+      line-height: 22px;
+      min-height: 100vh;
+      padding-bottom: 2rem;
+    }
+
+    /* ── Header ── */
+    .header {
+      background: var(--bg-dark);
+      padding: 14px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 2px solid var(--cyan);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .header h1 {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--cyan);
+      letter-spacing: 0.3px;
+    }
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .ws-dot {
+      display: inline-block;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--gray);
+    }
+    .ws-dot.live { background: var(--cyan); }
+    #header-ts {
+      font-size: 13px;
+      color: var(--gray-lt);
+    }
+
+    /* ── Auth overlay ── */
+    #auth {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 60vh;
+      gap: 14px;
+    }
+    #auth h2 { color: var(--cyan-lt); font-size: 18px; font-weight: 600; }
+    #auth-error { color: var(--orange); font-size: 14px; display: none; }
+    #pw-input {
+      background: var(--bg-dark);
+      border: 1px solid var(--cyan);
+      color: var(--white);
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 16px;
+      outline: none;
+      width: 240px;
+    }
+    #pw-input:focus { border-color: var(--cyan-lt); }
+    #pw-submit {
+      background: var(--cyan);
+      color: var(--navy);
+      border: none;
+      padding: 8px 22px;
+      border-radius: 6px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    #pw-submit:hover { background: var(--cyan-lt); }
+
+    /* ── Dashboard ── */
+    #dashboard { display: none; }
+
+    .section-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      color: var(--gray);
+      padding: 20px 24px 8px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+      gap: 12px;
+      padding: 0 24px;
+    }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid rgba(65, 185, 195, 0.2);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .card:hover { border-color: var(--cyan); }
+    .card.stale {
+      background: var(--bg-stale);
+      border-color: rgba(255,255,255,0.06);
+    }
+    .card.stale:hover { border-color: rgba(255,255,255,0.18); }
+
+    .card-name {
+      padding: 7px 12px;
+      font-weight: 700;
+      font-size: 14px;
+      background: var(--cyan);
+      color: var(--navy);
+    }
+    .card.stale .card-name {
+      background: #3a5465;
+      color: var(--gray-lt);
+    }
+
+    .card-body {
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      color: var(--cyan);
+      margin-bottom: 2px;
+    }
+    .status-badge.offline { color: var(--gray); }
+
+    .dot-live {
+      display: inline-block;
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--cyan);
+      flex-shrink: 0;
+    }
+    .status-badge.offline .dot-live { background: var(--gray); }
+
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+    }
+    .stat-label { color: var(--gray); }
+    .stat-val { color: var(--gray-lt); font-variant-numeric: tabular-nums; }
+
+    .empty {
+      padding: 8px 24px;
+      color: var(--gray);
+      font-size: 14px;
+      font-style: italic;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <h1>HTTPS Reflector</h1>
+  <div class="header-right">
+    <span class="ws-dot" id="ws-dot"></span>
+    <span id="header-ts">connecting…</span>
+  </div>
+</div>
+
+<div id="auth">
+  <h2>Status Dashboard</h2>
+  <div id="auth-error">Incorrect password</div>
+  <input type="password" id="pw-input" placeholder="Password" autocomplete="current-password" />
+  <button id="pw-submit">Connect</button>
+</div>
+
+<div id="dashboard">
+  <div class="section-label">CONNECTED / TODAY</div>
+  <div class="grid" id="grid-active"></div>
+  <div class="empty" id="empty-active">No active devices today</div>
+
+  <div class="section-label" id="label-old" style="display:none">PREVIOUSLY CONNECTED</div>
+  <div class="grid" id="grid-old"></div>
+  <div class="empty" id="empty-old"></div>
+</div>
+
+<script>
+(function () {
+  var ws = null;
+
+  var authDiv  = document.getElementById('auth');
+  var dashboard = document.getElementById('dashboard');
+  var authError = document.getElementById('auth-error');
+  var pwInput  = document.getElementById('pw-input');
+  var pwSubmit = document.getElementById('pw-submit');
+  var headerTs = document.getElementById('header-ts');
+  var wsDot    = document.getElementById('ws-dot');
+
+  function setConnected(on) {
+    wsDot.className = 'ws-dot' + (on ? ' live' : '');
+  }
+
+  function connect(password) {
+    if (ws) { try { ws.close(); } catch(e) {} }
+    var proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
+    ws = new WebSocket(proto + location.host + '/https-reflector/status.ws');
+
+    ws.onopen = function () {
+      setConnected(true);
+      if (password != null) ws.send(password);
+    };
+
+    ws.onmessage = function (evt) {
+      var data;
+      try { data = JSON.parse(evt.data); } catch(e) { return; }
+      authDiv.style.display   = 'none';
+      dashboard.style.display = 'block';
+      render(data);
+    };
+
+    ws.onclose = function (evt) {
+      setConnected(false);
+      if (evt.code === 4401) {
+        authDiv.style.display   = '';
+        dashboard.style.display = 'none';
+        authError.style.display = '';
+        pwInput.value = '';
+        pwInput.focus();
+      } else if (dashboard.style.display === 'block') {
+        headerTs.textContent = 'Disconnected — reload to reconnect';
+      }
+    };
+  }
+
+  pwSubmit.onclick = function () {
+    authError.style.display = 'none';
+    connect(pwInput.value);
+  };
+  pwInput.onkeydown = function (e) {
+    if (e.key === 'Enter') pwSubmit.onclick();
+  };
+
+  // ── Formatting helpers ──
+
+  function fmtBytes(n) {
+    if (n >= 1073741824) return (n / 1073741824).toFixed(1) + ' GB';
+    if (n >= 1048576)    return (n / 1048576).toFixed(1) + ' MB';
+    if (n >= 1024)       return (n / 1024).toFixed(1) + ' KB';
+    return n + ' B';
+  }
+
+  function fmtDur(ms) {
+    var s = Math.floor(ms / 1000);
+    var m = Math.floor(s / 60); s = s % 60;
+    var h = Math.floor(m / 60); m = m % 60;
+    if (h > 0) return h + 'h ' + m + 'm';
+    if (m > 0) return m + 'm ' + s + 's';
+    return s + 's';
+  }
+
+  function fmtAgo(ts) { return fmtDur(Date.now() - ts) + ' ago'; }
+
+  function fmtTime(ts) {
+    var d = new Date(ts);
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+         + ' ' + d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  }
+
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function row(label, val) {
+    return '<div class="stat-row"><span class="stat-label">' + label + '</span>'
+         + '<span class="stat-val">' + esc(val) + '</span></div>';
+  }
+
+  function makeCard(name, rec) {
+    var card = document.createElement('div');
+
+    var todayMidnight = new Date(); todayMidnight.setHours(0,0,0,0);
+    var active = rec.connected || (rec.lastConnectedAt && rec.lastConnectedAt >= todayMidnight.getTime());
+    card.className = 'card' + (active ? '' : ' stale');
+
+    var badge, rows = '';
+    if (rec.connected) {
+      var dur = rec.sessionStartAt ? fmtDur(Date.now() - rec.sessionStartAt) : '—';
+      badge = '<div class="status-badge"><span class="dot-live"></span>LIVE &nbsp;' + esc(dur) + '</div>';
+      if (rec.sessionStartAt) rows += row('Since', fmtTime(rec.sessionStartAt));
+    } else {
+      var ago = rec.lastDisconnectedAt ? fmtAgo(rec.lastDisconnectedAt) : 'never';
+      badge = '<div class="status-badge offline"><span class="dot-live"></span>' + esc(ago) + '</div>';
+      if (rec.lastConnectedAt) rows += row('Last seen', fmtTime(rec.lastConnectedAt));
+    }
+
+    rows += row('Connections', rec.connectionCount.toLocaleString());
+    rows += row('Requests',    rec.requestCount.toLocaleString());
+    rows += row('In',          fmtBytes(rec.bytesIn));
+    rows += row('Out',         fmtBytes(rec.bytesOut));
+
+    card.innerHTML = '<div class="card-name">' + esc(name) + '</div>'
+                   + '<div class="card-body">' + badge + rows + '</div>';
+    return card;
+  }
+
+  function render(snapshot) {
+    headerTs.textContent = 'Updated ' + new Date(snapshot.ts).toLocaleTimeString();
+
+    var cutoff = new Date(); cutoff.setHours(0,0,0,0);
+    var cut = cutoff.getTime();
+
+    var names = Object.keys(snapshot.devices).sort();
+    var active = [], old = [];
+    for (var i = 0; i < names.length; i++) {
+      var rec = snapshot.devices[names[i]];
+      if (rec.connected || (rec.lastConnectedAt && rec.lastConnectedAt >= cut)) {
+        active.push(names[i]);
+      } else {
+        old.push(names[i]);
+      }
+    }
+
+    var gA = document.getElementById('grid-active');
+    var gO = document.getElementById('grid-old');
+    var eA = document.getElementById('empty-active');
+    var eO = document.getElementById('empty-old');
+    var lO = document.getElementById('label-old');
+
+    gA.innerHTML = '';
+    gO.innerHTML = '';
+
+    if (active.length) {
+      eA.style.display = 'none';
+      for (var j = 0; j < active.length; j++) {
+        gA.appendChild(makeCard(active[j], snapshot.devices[active[j]]));
+      }
+    } else {
+      eA.style.display = '';
+    }
+
+    if (old.length) {
+      lO.style.display = '';
+      eO.style.display = 'none';
+      for (var k = 0; k < old.length; k++) {
+        gO.appendChild(makeCard(old[k], snapshot.devices[old[k]]));
+      }
+    } else {
+      lO.style.display = 'none';
+      eO.style.display = 'none';
+    }
+  }
+
+  // initial connection — no password sent; server responds immediately if no auth required
+  connect(null);
+})();
+</script>
+</body>
+</html>
