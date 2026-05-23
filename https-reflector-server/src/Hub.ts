@@ -20,6 +20,13 @@ log.debug = ()=>{};
 
 const STATIC_DIR = __dirname + '/../static';
 
+const HUB_PREFIX = '/https-reflector';
+const LEGACY_HUB_PREFIX = '/otto-hub';  // alias kept for backward compatibility
+
+function isHubPath(path: string): boolean {
+    return path.startsWith(HUB_PREFIX) || path.startsWith(LEGACY_HUB_PREFIX);
+}
+
 
 export default class Hub {
     hostname: string;
@@ -48,7 +55,7 @@ export default class Hub {
         this.io_http_server.removeAllListeners('upgrade');
         let io_opts = {
             transports: ['websocket'],  // websockets only, no long poll
-            //path: '/otto-hub/',
+            //path: HUB_PREFIX + '/',
             serveClient: false,
         };
         this.io = new SocketIOServer(this.io_http_server, io_opts);
@@ -57,7 +64,7 @@ export default class Hub {
 
 
     requestHandler(devicename: string, req: any, res: any): void {
-        if (!req.url.startsWith('/otto-hub')) {
+        if (!isHubPath(req.url)) {
             // a client trying to connect to a device via the reflector
             this.upstreamRequestHandler(devicename, req, res);
         } else {
@@ -70,12 +77,12 @@ export default class Hub {
     upgradeHandler(devicename: string, req: any, socket: any, head: any): void {
         let path = req.url;
         log.debug('hub upgradeHandler', path);
-        if (!path.startsWith('/otto-hub')) {
+        if (!isHubPath(path)) {
             // upstream socket
             this.upstreamUpgradeRequestHandler(devicename, req, socket, head);
         } else {
             // internal socket
-            if (path.startsWith('/otto-hub/socket.io/')) {
+            if (path.startsWith(HUB_PREFIX + '/socket.io/') || path.startsWith(LEGACY_HUB_PREFIX + '/socket.io/')) {
                 socket.devicename = devicename;
                 this.io.engine.handleUpgrade(req, socket, head);
                 this.io.once('connection', (io_socket) => {
@@ -95,15 +102,15 @@ export default class Hub {
             } else {
                 this.ws_server.handleUpgrade(req, socket, head, (ws) => {
                     log.debug('ws created with path', path, 'and devicename', devicename);
-                    if (path === '/otto-hub/uplink.ws') {  // uplink ws from a client device
+                    if (path === HUB_PREFIX + '/uplink.ws' || path === LEGACY_HUB_PREFIX + '/uplink.ws') {  // uplink ws from a client device
                         let ws_stream = WebSocketStream(ws);
                         // let ws_stream = createWebSocketStream(ws, { encoding: 'utf8' });  // maybe no encoding would do the trick to make this method work?
                         // see https://github.com/websockets/ws/issues/1781
                         this.connector_manager.addUplink(devicename, ws_stream, req);
                         // this.ws_server.emit('stream', duplex_stream, req);
-//                    } else if (path === '/otto-hub/connector.ws') {  // connector ws from a client device
+//                    } else if (path === HUB_PREFIX + '/connector.ws') {  // connector ws from a client device
 //                        this.connector_manager.addConnector(devicename, ws, req);
-                    } else if (path === '/otto-hub/status.ws') {  // ws for hub status
+                    } else if (path === HUB_PREFIX + '/status.ws' || path === LEGACY_HUB_PREFIX + '/status.ws') {  // ws for hub status
                         let status_pool = this.getStatusPool(devicename);
                         status_pool.addOne(ws);
                         this.sendStatusUpdate(devicename, status_pool.getStatus(), ws);
@@ -127,7 +134,7 @@ export default class Hub {
             // *.some-https-reflector-server.org requests only
             await new Promise((resolve) => process.nextTick(resolve));
             let uplink_exists = this.connector_manager.uplinkExists(devicename);
-            if (path.startsWith('/otto-hub') || (path === '/' && !uplink_exists))
+            if (isHubPath(path) || (path === '/' && !uplink_exists))
             {
                 //log.debug('passing request for', path, 'to express');
                 //app(req, res);

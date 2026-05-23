@@ -41,9 +41,9 @@ export default class UplinkConnector extends EventEmitter {
 
         url.pathname = '';
         this.hub_uplink_io_url = url.href;
-        url.pathname = '/otto-hub/connector.ws';
+        url.pathname = '/https-reflector/connector.ws';
         this.connector_ws_url = url.href;
-        url.pathname = '/otto-hub/uplink.ws';
+        url.pathname = '/https-reflector/uplink.ws';
         this.hub_uplink_ws_url = url.href;
         this.pool_options = {
             pool_size: options.pool_size,
@@ -69,7 +69,7 @@ export default class UplinkConnector extends EventEmitter {
         let opts = {
             reconnection: false,
             transports: ['websocket'],
-            path: '/otto-hub/socket.io/',
+            path: '/https-reflector/socket.io/',
         };
         this.connector_wsio = io_client(this.hub_uplink_io_url, opts);
         this.connector_wsio.connect();
