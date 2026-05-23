@@ -33,15 +33,24 @@ const defaults = {
 
 export default async function main() {
     let options = parseArgs(usage, defaults);
-    if (!options.hostname) {
-        throw new Error('--hostname <hostname> argument required');
-    }
+
     // env var fallbacks for options not set via CLI
-    if (!options.status_password && process.env.HTTPS_REFLECTOR_STATUS_PASSWORD) {
-        options.status_password = process.env.HTTPS_REFLECTOR_STATUS_PASSWORD;
+    const envMap: Record<string, string> = {
+        hostname:          'HTTPS_REFLECTOR_HOSTNAME',
+        status_password:   'HTTPS_REFLECTOR_STATUS_PASSWORD',
+        data_dir:          'HTTPS_REFLECTOR_DATA_DIR',
+        private_key_file:  'HTTPS_REFLECTOR_PRIVATE_KEY_FILE',
+        certificate_file:  'HTTPS_REFLECTOR_CERTIFICATE_FILE',
+        authority_file:    'HTTPS_REFLECTOR_AUTHORITY_FILE',
+    };
+    for (const key of Object.keys(envMap)) {
+        if (!options[key] && process.env[envMap[key]]) {
+            options[key] = process.env[envMap[key]];
+        }
     }
-    if (!options.data_dir && process.env.HTTPS_REFLECTOR_DATA_DIR) {
-        options.data_dir = process.env.HTTPS_REFLECTOR_DATA_DIR;
+
+    if (!options.hostname) {
+        throw new Error('--hostname <hostname> argument required (or set HTTPS_REFLECTOR_HOSTNAME)');
     }
     let server = new WebServer(options);
     await server.init();

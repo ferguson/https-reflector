@@ -1,0 +1,9 @@
+.git
+node_modules
+https-reflector-client/node_modules
+https-reflector-client/build
+https-reflector-server/node_modules
+https-reflector-server/build
+virtualize-node
+virtualize
+*.tar.gz
