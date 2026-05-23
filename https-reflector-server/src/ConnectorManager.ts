@@ -1,4 +1,5 @@
 import HubWSPool from './HubWSPool';
+import DeviceTracker from './DeviceTracker';
 
 const log = {...console};
 
@@ -9,11 +10,13 @@ export default class ConnectorManager {
     connector_pool: Map<string, any>;
     io_connector_pool: Map<string, any>;
     map_of_uplink_pools: Map<string, HubWSPool>;
+    private deviceTracker: DeviceTracker | null;
 
-    constructor() {
+    constructor(deviceTracker: DeviceTracker | null = null) {
         this.connector_pool = new Map();
         this.io_connector_pool = new Map();
         this.map_of_uplink_pools = new Map();
+        this.deviceTracker = deviceTracker;
     };
 
 
@@ -25,6 +28,7 @@ export default class ConnectorManager {
         if (!connector) {
             this.connector_pool.set(devicename, ws);
             log.log(`devicename ${devicename} connected`);
+            if (this.deviceTracker) this.deviceTracker.recordConnect(devicename);
             ws.on('close', () => this.destroyConnector(devicename));
             ws.on('error', () => this.destroyConnector(devicename));
             ws.send('proceed');
@@ -41,6 +45,7 @@ export default class ConnectorManager {
         if (!io_connector) {
             this.connector_pool.set(devicename, wsio);
             log.log(`devicename ${devicename} connected via socket io`);
+            if (this.deviceTracker) this.deviceTracker.recordConnect(devicename);
             wsio.on('disconnect', () => this.destroyConnector(devicename));
             wsio.on('connecterror', () => this.destroyConnector(devicename)); // i think this event name is wrong
             wsio.on('connect_error', (err) => {
@@ -59,6 +64,7 @@ export default class ConnectorManager {
     destroyConnector(devicename: string): void {
         // we lost the connection, clean up all related uplinks
         log.log(`devicename ${devicename} disconnected`);
+        if (this.deviceTracker) this.deviceTracker.recordDisconnect(devicename);
         let uplink_pool = this.getUplinkPool(devicename);
         uplink_pool.destroy();
         this.connector_pool.delete(devicename);

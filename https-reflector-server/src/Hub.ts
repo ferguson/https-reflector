@@ -1,30 +1,30 @@
 import http = require('http');
+import path = require('path');
 import pump = require('pump');
 import * as express from 'express';
 import _http_common = require('_http_common');
 //import asyncHandler from 'express-async-handler';
 import WebSocketStream = require('websocket-stream');
-import { WebSocketServer, createWebSocketStream } from 'ws';
-//import WS from 'ws';
-//const WebSocketServer = WS.WebSocketServer;
-//const createWebSocketStream = WS.createWebSocketStream;
+import { WebSocketServer } from 'ws';
 import { Server as SocketIOServer } from 'socket.io';
 
 import { HeaderBlock } from 'https-reflector-client';
-import { HubWSPool } from './API';
 import { ConnectorManager } from './API';
 import { WebServerOptions } from './types';
+import DeviceTracker from './DeviceTracker';
+import StatusServer from './StatusServer';
 
 const log = {...console};
 log.debug = ()=>{};
 
 const STATIC_DIR = __dirname + '/../static';
+const DEFAULT_DATA_DIR = path.join(__dirname, '../data');
 
 const HUB_PREFIX = '/https-reflector';
 const LEGACY_HUB_PREFIX = '/otto-hub';  // alias kept for backward compatibility
 
-function isHubPath(path: string): boolean {
-    return path.startsWith(HUB_PREFIX) || path.startsWith(LEGACY_HUB_PREFIX);
+function isHubPath(p: string): boolean {
+    return p.startsWith(HUB_PREFIX) || p.startsWith(LEGACY_HUB_PREFIX);
 }
 
 
@@ -32,21 +32,25 @@ export default class Hub {
     hostname: string;
     options: WebServerOptions;
     connector_manager: ConnectorManager;
-    statusPools: Map<string, HubWSPool>;
     ws_server: WebSocketServer;
     static_server: any;
     io_http_server: http.Server;
     io: SocketIOServer;
+    deviceTracker: DeviceTracker;
+    statusServer: StatusServer;
 
     constructor(options: WebServerOptions) {
         this.hostname = options.hostname;
         this.options = options;
-        this.connector_manager = new ConnectorManager();
-        this.statusPools = new Map();
+        const dataDir = options.data_dir || DEFAULT_DATA_DIR;
+        this.deviceTracker = new DeviceTracker(dataDir);
+        this.statusServer = new StatusServer(this.deviceTracker, options.status_password || null);
+        this.connector_manager = new ConnectorManager(this.deviceTracker);
     }
 
 
     async init(): Promise<void> {
+        this.deviceTracker.init();
         this.ws_server = new WebSocketServer(
             { clientTracking: false, noServer: true, perMessageDeflate: false }
         );
@@ -59,7 +63,11 @@ export default class Hub {
             serveClient: false,
         };
         this.io = new SocketIOServer(this.io_http_server, io_opts);
-        //this.io = new SocketIOServer(io_opts);
+    }
+
+
+    shutdown(): void {
+        this.deviceTracker.shutdown();
     }
 
 
@@ -75,14 +83,14 @@ export default class Hub {
 
 
     upgradeHandler(devicename: string, req: any, socket: any, head: any): void {
-        let path = req.url;
-        log.debug('hub upgradeHandler', path);
-        if (!isHubPath(path)) {
+        let p = req.url;
+        log.debug('hub upgradeHandler', p);
+        if (!isHubPath(p)) {
             // upstream socket
             this.upstreamUpgradeRequestHandler(devicename, req, socket, head);
         } else {
             // internal socket
-            if (path.startsWith(HUB_PREFIX + '/socket.io/') || path.startsWith(LEGACY_HUB_PREFIX + '/socket.io/')) {
+            if (p.startsWith(HUB_PREFIX + '/socket.io/') || p.startsWith(LEGACY_HUB_PREFIX + '/socket.io/')) {
                 socket.devicename = devicename;
                 this.io.engine.handleUpgrade(req, socket, head);
                 this.io.once('connection', (io_socket) => {
@@ -101,21 +109,16 @@ export default class Hub {
                 });
             } else {
                 this.ws_server.handleUpgrade(req, socket, head, (ws) => {
-                    log.debug('ws created with path', path, 'and devicename', devicename);
-                    if (path === HUB_PREFIX + '/uplink.ws' || path === LEGACY_HUB_PREFIX + '/uplink.ws') {  // uplink ws from a client device
+                    log.debug('ws created with path', p, 'and devicename', devicename);
+                    if (p === HUB_PREFIX + '/uplink.ws' || p === LEGACY_HUB_PREFIX + '/uplink.ws') {
                         let ws_stream = WebSocketStream(ws);
-                        // let ws_stream = createWebSocketStream(ws, { encoding: 'utf8' });  // maybe no encoding would do the trick to make this method work?
-                        // see https://github.com/websockets/ws/issues/1781
                         this.connector_manager.addUplink(devicename, ws_stream, req);
-                        // this.ws_server.emit('stream', duplex_stream, req);
-//                    } else if (path === HUB_PREFIX + '/connector.ws') {  // connector ws from a client device
+//                    } else if (p === HUB_PREFIX + '/connector.ws') {  // connector ws from a client device
 //                        this.connector_manager.addConnector(devicename, ws, req);
-                    } else if (path === HUB_PREFIX + '/status.ws' || path === LEGACY_HUB_PREFIX + '/status.ws') {  // ws for hub status
-                        let status_pool = this.getStatusPool(devicename);
-                        status_pool.addOne(ws);
-                        this.sendStatusUpdate(devicename, status_pool.getStatus(), ws);
+                    } else if (p === HUB_PREFIX + '/status.ws' || p === LEGACY_HUB_PREFIX + '/status.ws') {
+                        this.statusServer.addClient(ws);
                     } else {
-                        log.error('ignored unknown ws stream path', path);
+                        log.error('ignored unknown ws stream path', p);
                     }
                 });
             }
@@ -124,8 +127,8 @@ export default class Hub {
 
 
     async hubInternalRequestHandler(devicename: string, req: any, res: any): Promise<void> {
-        let path = req.url;
-        log.log('hubInternalRequest', path);
+        let p = req.url;
+        log.log('hubInternalRequest', p);
 
         if (!devicename) {
             // not *.some-https-reflector-server.org
@@ -134,11 +137,8 @@ export default class Hub {
             // *.some-https-reflector-server.org requests only
             await new Promise((resolve) => process.nextTick(resolve));
             let uplink_exists = this.connector_manager.uplinkExists(devicename);
-            if (isHubPath(path) || (path === '/' && !uplink_exists))
-            {
-                //log.debug('passing request for', path, 'to express');
-                //app(req, res);
-                log.debug('passing request for', path, 'to express.static');
+            if (isHubPath(p) || (p === '/' && !uplink_exists)) {
+                log.debug('passing request for', p, 'to express.static');
                 this.static_server(req, res, () => {});
             }
         }
@@ -172,9 +172,6 @@ export default class Hub {
             log.warn('req.socket', req.socket);
             log.warn('socket', socket);
         }
-        // pass the upgrade socket request on to the hub node
-        // i think node has prepped everything for us so we don't
-        // need to close the req or res (i hope)
         this.handOffToUpstreamSocket(devicename, req, head);
     }
 
@@ -188,11 +185,7 @@ export default class Hub {
         let header_block_string: string;
         if (head === null) {
             // requests
-            //header_block_string = HeaderBlock.buildHeaderBlockString(req.rawHeaders, true);
             header_block_string = HeaderBlock.buildHeaderBlockString(req.rawHeaders, false);  // trying this FIXME
-            // // force separate connections for each request
-            // header_block_string += 'Connection: close\r\n';
-            //'cache-control: no-cache'?
         } else {
             // upgrade requests
             header_block_string = HeaderBlock.buildHeaderBlockString(req.rawHeaders, false);
@@ -210,7 +203,12 @@ export default class Hub {
             socket.destroy();
             return;
         }
-        //ws.pipe(socket).pipe(ws);  // using pump instead
+
+        // count bytes flowing through this proxied connection
+        this.deviceTracker.recordRequest(devicename);
+        socket.on('data', (chunk: Buffer) => this.deviceTracker.addBytes(devicename, chunk.length, 0));
+        ws.on('data',     (chunk: Buffer) => this.deviceTracker.addBytes(devicename, 0, chunk.length));
+
         pump(pump(socket, ws), socket, (err) => {
             if (err) log.debug('hub pump error', err.code);
         });
@@ -253,49 +251,5 @@ export default class Hub {
         let hostname = this.getHostnameFromHost(host);
         let devicename = this.getDevicenameFromHostname(hostname);
         return devicename;
-    }
-
-
-    sendStatusUpdate(devicename: string, status: any, wsocket: any = null): void {
-        return;  //FIXME convert status to use socket.io
-        let json: string;
-        try {
-            json = JSON.stringify(status);
-        } catch(err) {
-            log.error('error stringifying status', status, err);
-            return;
-        }
-        log.debug('status', status, 'json', json);
-
-        let wsockets: any[];
-        if (wsocket) {
-            wsockets = [wsocket];  // make it an array
-        } else {
-            let ws_status_pool = this.getStatusPool(devicename);
-            wsockets = ws_status_pool.pool.keys();
-        }
-
-        for (let wsocket of wsockets) {
-            try {
-                wsocket.write(json);
-            } catch(err) {
-                log.error('error sending status ws message', err);
-            }
-        }
-    }
-
-
-    getStatusPool(devicename: string): HubWSPool {
-        devicename = devicename || this.hostname;
-        log.debug('getStatusPool devicename', devicename);
-        let pool = this.statusPools.get(devicename);
-        if (!pool) {
-            this.statusPools.set(devicename, new HubWSPool(devicename));
-            pool = this.statusPools.get(devicename);
-            // ws_tunnel_pool.on('status', (status) => {
-            //     this.sendStatusUpdate(devicename, status);
-            // });
-        }
-        return pool;
     }
 }

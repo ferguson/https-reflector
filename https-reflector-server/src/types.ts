@@ -11,4 +11,18 @@ export interface WebServerOptions {
     private_key_file?: string;
     certificate_file?: string;
     authority_file?: string;
+    status_password?: string;
+    data_dir?: string;
+}
+
+export interface DeviceRecord {
+    firstSeenAt: number;
+    lastConnectedAt: number | null;
+    lastDisconnectedAt: number | null;
+    connectionCount: number;
+    requestCount: number;
+    bytesIn: number;
+    bytesOut: number;
+    connected: boolean;
+    sessionStartAt: number | null;
 }

@@ -10,18 +10,20 @@ import { WebServer } from './API';
 const log = {...console};
 
 const usage = `
-  --hostname <hostname>  - the external host name of the server (required)
+  --hostname <hostname>       - the external host name of the server (required)
 
-  --port <port>          - override the default port (80 for http, 443 for https)
-  --use-https            - use https
-  --redirect-http        - redirect port 80 to port 443 (or --port) if using https
-  --redirect-port        - change port for redirector to listen on (default 80)
-  --use-vhosts           - use <devicename>.<hostname> to route multiple upstream nodes
-                               (requires DNS support)
-  --bind                 - the ip address to bind to (default 0.0.0.0)
-  --private-key-file     - privkey.pem file to use for https
-  --certificate-file     - cert.pem file to use for https
-  --authority-file       - chain.pem file to use for https
+  --port <port>               - override the default port (80 for http, 443 for https)
+  --use-https                 - use https
+  --redirect-http             - redirect port 80 to port 443 (or --port) if using https
+  --redirect-port             - change port for redirector to listen on (default 80)
+  --use-vhosts                - use <devicename>.<hostname> to route multiple upstream nodes
+                                    (requires DNS support)
+  --bind                      - the ip address to bind to (default 0.0.0.0)
+  --private-key-file          - privkey.pem file to use for https
+  --certificate-file          - cert.pem file to use for https
+  --authority-file            - chain.pem file to use for https
+  --status-password <pass>    - password for the status dashboard WebSocket
+  --data-dir <dir>            - directory for persisted device stats (default: server/data)
 `;
 
 const defaults = {
@@ -32,6 +34,13 @@ export default async function main() {
     let options = parseArgs(usage, defaults);
     if (!options.hostname) {
         throw new Error('--hostname <hostname> argument required');
+    }
+    // env var fallbacks for options not set via CLI
+    if (!options.status_password && process.env.HTTPS_REFLECTOR_STATUS_PASSWORD) {
+        options.status_password = process.env.HTTPS_REFLECTOR_STATUS_PASSWORD;
+    }
+    if (!options.data_dir && process.env.HTTPS_REFLECTOR_DATA_DIR) {
+        options.data_dir = process.env.HTTPS_REFLECTOR_DATA_DIR;
     }
     let server = new WebServer(options);
     await server.init();
