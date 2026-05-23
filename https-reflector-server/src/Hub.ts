@@ -77,12 +77,16 @@ export default class Hub {
 
 
     requestHandler(devicename: string, req: any, res: any): void {
-        if (!isHubPath(req.url)) {
-            // a client trying to connect to a device via the reflector
-            this.upstreamRequestHandler(devicename, req, res);
-        } else {
+        if (isHubPath(req.url)) {
             // device reflector client connections, and requests regarding them
             this.hubInternalRequestHandler(devicename, req, res);
+        } else if (this.connector_manager.uplinkExists(devicename)) {
+            // device is online — proxy the request through
+            this.upstreamRequestHandler(devicename, req, res);
+        } else {
+            // device is offline — serve the wait page for any path
+            req.url = '/';
+            this.static_server(req, res, () => { res.statusCode = 503; res.end(); });
         }
     }
 

@@ -13,8 +13,9 @@ log.debug = ()=>{};
 //import { fileURLToPath } from 'url';
 //import { dirname } from 'path';
 //const __dirname = dirname(fileURLToPath(import.meta.url));
-const BUILT_IN_STATIC_DIR = __dirname + '/../static';
-const PUBLIC_STATIC_DIR   = process.env.HTTPS_REFLECTOR_PUBLIC_STATIC_DIR || null;
+const BUILT_IN_STATIC_DIR  = __dirname + '/../static';
+const BUILT_IN_PUBLIC_DIR  = BUILT_IN_STATIC_DIR + '/public';
+const PUBLIC_STATIC_DIR    = process.env.HTTPS_REFLECTOR_PUBLIC_STATIC_DIR || null;
 
 const DEFAULT_CERTIFICATE_DIR  = '/etc/letsencrypt/live/some-https-reflector-server.org';
 
@@ -134,8 +135,8 @@ export default class WebServer {
     addRoutes(app: express.Application): void {
         // admin dashboard — always served from the built-in static dir, regardless of PUBLIC_STATIC_DIR
         app.use('/admin', express.static(BUILT_IN_STATIC_DIR + '/admin'));
-        // public-facing static files
-        app.use(express.static(PUBLIC_STATIC_DIR || BUILT_IN_STATIC_DIR));
+        // public-facing static files — custom dir takes priority, then built-in public landing page
+        app.use(express.static(PUBLIC_STATIC_DIR || BUILT_IN_PUBLIC_DIR));
     }
 
 
