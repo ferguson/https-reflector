@@ -1,8 +1,8 @@
 {
   "compilerOptions": {
-    "target": "es5",
-    "lib": ["ES2015"],
-    "allowJs": true,
+    "target": "es2015",
+    "module": "commonjs",
+    "lib": ["es2015"],
     "skipLibCheck": true,
     "allowSyntheticDefaultImports": true,
     "strict": false,
@@ -10,8 +10,10 @@
     "forceConsistentCasingInFileNames": true,
     "esModuleInterop": true,
     "moduleResolution": "node",
-    "isolatedModules": false,
-    "outDir": "build"
+    "outDir": "build",
+    "rootDir": "src",
+    "declaration": true,
+    "sourceMap": true
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts"]
 }

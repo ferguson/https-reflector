@@ -3,6 +3,7 @@ import WebSocket = require('ws');
 import io_client = require('socket.io-client');
 
 import UplinkWSPool from './UplinkWSPool';
+import { UplinkConnectorOptions } from './types';
 
 const log = {...console};
 log.debug = ()=>{};
@@ -12,13 +13,27 @@ const DEFAULT_RETRY_TIMEOUT_MS = 3000;  // 3 seconds
 
 
 export default class UplinkConnector extends EventEmitter {
-    constructor(hub_url, options) {
+    hub_url: string;
+    connected: boolean;
+    heartbeat_interval: NodeJS.Timeout | null;
+    retry_timeout: NodeJS.Timeout | null;
+    uplink_ws_pool: UplinkWSPool | null;
+    hub_uplink_io_url: string;
+    connector_ws_url: string;
+    hub_uplink_ws_url: string;
+    pool_options: UplinkConnectorOptions;
+    connector_wsio: any;
+    connector_ws: WebSocket | null;
+
+    constructor(hub_url: string, options: UplinkConnectorOptions) {
         super();
         this.hub_url = hub_url;
         this.connected = false;
         this.heartbeat_interval = null;
         this.retry_timeout = null;
         this.uplink_ws_pool = null;
+        this.connector_wsio = null;
+        this.connector_ws = null;
 
         let url = new URL(this.hub_url);
         let ws_protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -39,24 +54,24 @@ export default class UplinkConnector extends EventEmitter {
     }
 
 
-    async init() {
+    async init(): Promise<void> {
         this.connect();
     }
 
 
-    connect() {
+    connect(): void {
         //this.connect_old();
         this.connect_new();
     }
 
 
-    connect_new() {
+    connect_new(): void {
         let opts = {
             reconnection: false,
             transports: ['websocket'],
             path: '/otto-hub/socket.io/',
         };
-        this.connector_wsio = new io_client(this.hub_uplink_io_url, opts);
+        this.connector_wsio = io_client(this.hub_uplink_io_url, opts);
         this.connector_wsio.connect();
 
         this.connector_wsio.onAny( (event, ...args) => {
@@ -73,7 +88,9 @@ export default class UplinkConnector extends EventEmitter {
             this.emit('connected');
             this.uplink_ws_pool = new UplinkWSPool(this.hub_uplink_ws_url, this.pool_options);
             this.uplink_ws_pool.fillPool();
-            this.heartbeat_interval = setInterval( () => { this.heartbeat(); }, HEARTBEAT_INTERVAL_MS);
+            // socket.io has its own heartbeat so this interval is unneeded; restore if ever
+            // switching back to plain WebSockets via connect_old():
+            //this.heartbeat_interval = setInterval( () => { this.heartbeat(); }, HEARTBEAT_INTERVAL_MS);
         });
 
         this.connector_wsio.on('connect_error', (err) => {
@@ -104,7 +121,7 @@ export default class UplinkConnector extends EventEmitter {
     }
 
 
-    connect_old() {
+    connect_old(): void {
         this.connector_ws = new WebSocket(this.connector_ws_url);
 
         this.connector_ws.on('open', () => {
@@ -132,17 +149,17 @@ export default class UplinkConnector extends EventEmitter {
     }
 
 
-    close_or_error() {
+    close_or_error(): void {
         this.disconnect();
         this.reconnect();
     }
 
 
-    async reconnect() {
+    async reconnect(): Promise<void> {
         if (this.retry_timeout) {
             return;  // a reconnect is already pending
         }
-        await new Promise( (resolve) => {
+        await new Promise<void>( (resolve) => {
             this.retry_timeout = setTimeout( () => {
                 this.retry_timeout = null;
                 resolve();
@@ -153,7 +170,7 @@ export default class UplinkConnector extends EventEmitter {
     }
 
 
-    heartbeat() {
+    heartbeat(): void {
         // if (ws && ws.readystate === 1) {
         //     ws.socket.ping();
         //     log.debug('ping');
@@ -164,7 +181,7 @@ export default class UplinkConnector extends EventEmitter {
     }
 
 
-    disconnect() {
+    disconnect(): void {
         this.connected = false;
         this.emit('disconnected');
         if (this.connector_wsio) {

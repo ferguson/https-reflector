@@ -5,12 +5,19 @@ const MAX_HEADERS_BLOCK_SIZE = 8192;
 
 
 export default class HeaderBlock {
+    headers: Headers;
+    method: string;
+    path: string;
+    protocol: string;
+    method_line: string;
+    status_line: string;
+
     constructor() {
         this.headers = new Headers();
     }
 
 
-    addMethodLine(req, protocol='HTTP/1.1') {
+    addMethodLine(req: any, protocol: string = 'HTTP/1.1'): void {
         this.method = req.method;
         this.path = req.url;  // req.url is actually path + params
         this.protocol = protocol;
@@ -18,18 +25,18 @@ export default class HeaderBlock {
     }
 
 
-    changePath(path) {
+    changePath(path: string): void {
         this.path = path;
         this.method_line = `${this.method} ${this.path} ${this.protocol}`;
     }
 
 
-    addStatusLine(response) {
+    addStatusLine(response: any): void {
         this.status_line = `${response.status} ${response.statusText}`;
     }
 
 
-    addFromRawHeaders(raw_headers) {
+    addFromRawHeaders(raw_headers: string[]): void {
         //log.debug(`raw_headers\n${raw_headers}`);
         for (let i=0; i<raw_headers.length; i+=2) {
             let name  = raw_headers[i];
@@ -39,7 +46,7 @@ export default class HeaderBlock {
     }
 
 
-    addFromString(headers_string, has_method_line=false) {
+    addFromString(headers_string: string, has_method_line: boolean = false): void {
         let lines = headers_string.split(/\r?\n/);
         if (has_method_line) {
             // method line is the first line
@@ -57,22 +64,34 @@ export default class HeaderBlock {
     }
 
 
-    addFromHeadersObj(headers) {
+    addFromHeadersObj(headers: Headers): void {
         for (let [name, value] of headers) {
             this.headers.append(name, value);
         }
     }
 
 
-    async addFromSocket(socket, has_method_line=true) {
-        let headers_data = new Buffer(0);
+    async addFromSocket(socket: any, has_method_line: boolean = true): Promise<void> {
+        let headers_data = Buffer.alloc(0);
         let eohb = 0;  // end of header block (including terminating blank line)
 
         while (eohb === 0) {
-            let data = await new Promise((resolve) => socket.once('data', resolve));
+            let data = await new Promise<Buffer>((resolve, reject) => {
+                const onData  = (d: Buffer) => { cleanup(); resolve(d); };
+                const onClose = () => { cleanup(); reject(new Error('socket closed during header read')); };
+                const onError = (e: Error) => { cleanup(); reject(e); };
+                const cleanup = () => {
+                    socket.removeListener('data',  onData);
+                    socket.removeListener('close', onClose);
+                    socket.removeListener('error', onError);
+                };
+                socket.once('data',  onData);
+                socket.once('close', onClose);
+                socket.once('error', onError);
+            });
             headers_data = Buffer.concat([headers_data, data]);
 
-            if (headers_data > MAX_HEADERS_BLOCK_SIZE) {
+            if (headers_data.length > MAX_HEADERS_BLOCK_SIZE) {
                 throw new Error('headers block size exceeded');
             }
 
@@ -108,8 +127,8 @@ export default class HeaderBlock {
     }
 
 
-    toHeadersString(suppress_method_line=true, suppress_blank_line_finalizer=false) {
-        let lines = [];
+    toHeadersString(suppress_method_line: boolean = true, suppress_blank_line_finalizer: boolean = false): string {
+        let lines: string[] = [];
 
         if (this.method_line && !suppress_method_line) {
             lines.push(this.method_line);
@@ -132,11 +151,11 @@ export default class HeaderBlock {
         return headers_string;
     }
 
-    toHeadersObj() {
+    toHeadersObj(): Headers {
         return this.headers;
     }
 
-  static buildHeaderBlockString(raw_headers, suppress_connection=false) {
+  static buildHeaderBlockString(raw_headers: string[], suppress_connection: boolean = false): string {
       let header_block_string = '';
       let skip_next = false;
       for (let i in raw_headers) {
@@ -145,7 +164,7 @@ export default class HeaderBlock {
               continue;
           }
           let entry = raw_headers[i];
-          if (i % 2 === 0) {
+          if (Number(i) % 2 === 0) {
               if (suppress_connection && entry.toLowerCase() === 'connection') {
                   skip_next = true;
                   continue;

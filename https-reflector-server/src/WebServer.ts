@@ -5,6 +5,7 @@ import express = require('express');
 //import asyncHandler = require('express-async-handler');
 
 import Hub from './Hub';
+import { WebServerOptions } from './types';
 
 const log = {...console};
 log.debug = ()=>{};
@@ -16,7 +17,7 @@ const STATIC_DIR = process.env.HTTPS_REFLECTOR_PUBLIC_STATIC_DIR || __dirname + 
 
 const DEFAULT_CERTIFICATE_DIR  = '/etc/letsencrypt/live/some-https-reflector-server.org';
 
-const defaults = {
+const defaults: Partial<WebServerOptions> = {
     bind: '0.0.0.0',
     http_port: 80,
     https_port: 443,
@@ -28,7 +29,11 @@ const defaults = {
 
 
 export default class WebServer {
-    constructor(options) {
+    options: WebServerOptions;
+    app: express.Application;
+    hub: Hub;
+
+    constructor(options: WebServerOptions) {
         this.options = Object.assign({}, defaults, options);
         if (this.options.hostname.startsWith('*.')) {
             this.options.use_vhosts = true;
@@ -37,12 +42,12 @@ export default class WebServer {
     }
 
 
-    async init() {
-        let web_server;
-        let web_server_options = {
+    async init(): Promise<void> {
+        let web_server: http.Server | https.Server;
+        let web_server_options: any = {
             keepAlive: true
         };
-        let use_port;
+        let use_port: number;
         if (!this.options.use_https) {
             web_server = http.createServer(web_server_options);
             use_port = this.options.port || this.options.http_port;
@@ -78,9 +83,9 @@ export default class WebServer {
     }
 
 
-    requestHandler(req, res) {
+    requestHandler(req: any, res: any): void {
         log.debug('requestHandler', req.url);
-        let devicename;
+        let devicename: string;
         if (this.options.use_vhosts) {
             devicename = this.getDevicenameFromReq(req);
             log.log(`[${devicename||''}] ${req.url}`);
@@ -100,9 +105,9 @@ export default class WebServer {
     }
 
 
-    upgradeHandler(req, socket, head) {
+    upgradeHandler(req: any, socket: any, head: any): void {
         log.debug('upgradeHandler', req.url);
-        let devicename;
+        let devicename: string;
         if (this.options.use_vhosts) {
             devicename = this.getDevicenameFromReq(req);
             log.log(`[${devicename||''}] ${req.url}`);
@@ -122,7 +127,7 @@ export default class WebServer {
     }
 
 
-    addRoutes(app) {
+    addRoutes(app: express.Application): void {
         app.use(express.static(STATIC_DIR));
         // app.get('/', (req, res) => {
         //     log.log('hello!');
@@ -131,7 +136,7 @@ export default class WebServer {
     }
 
 
-    getDevicenameFromReq(req) {
+    getDevicenameFromReq(req: any): string | null {
         let host = this.hub.getHostHeader(req) || this.options.hostname;
         log.debug('host', host);
         let hostname = this.hub.getHostnameFromHost(host);
@@ -142,7 +147,7 @@ export default class WebServer {
     }
 
 
-    initHTTPRedirector() {
+    initHTTPRedirector(): void {
         let redirect_app = express();  // using express here is a bit overkill
         let redirect_server = http.createServer(redirect_app);
 

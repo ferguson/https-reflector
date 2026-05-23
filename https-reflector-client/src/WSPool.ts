@@ -1,3 +1,4 @@
+import stream = require('stream');
 import { EventEmitter } from 'events';
 
 const log = {...console};
@@ -5,12 +6,17 @@ log.debug = ()=>{};
 
 const HEARTBEAT_INTERVAL_MS = 30 * 1000;
 
+type WSStream = stream.Duplex & { socket: any };
 
 // remember, these are not straight up node WebSockets
 // they are wrapped by websocket-stream
 // original WebSocket is at ws.socket
 
 export default class WSPool extends EventEmitter {
+    pool: Set<WSStream>;
+    intervals: Map<WSStream, NodeJS.Timeout>;
+    waiting_queue: any[];
+
     constructor() {
         super();
         this.pool = new Set();
@@ -19,47 +25,48 @@ export default class WSPool extends EventEmitter {
     }
 
 
-    getPoolSize() {
+    getPoolSize(): number {
         return this.pool.size;
     }
 
 
-    addOne(ws) {
-        this.pool.add(ws);
+    addOne(ws: stream.Duplex): void {
+        let wsStream = ws as WSStream;
+        this.pool.add(wsStream);
         log.debug('addOne: added to pool', this.pool.size, this.waiting_queue.length);
 
-        ws.on('error', (err) => {
+        wsStream.on('error', (err) => {
             log.warn('wsstream error', err.code);
-            this.terminateOne(ws);
+            this.terminateOne(wsStream);
         });
-        ws.socket.on('error', (err) => {
+        wsStream.socket.on('error', (err) => {
             log.warn('ws error', err.code);
-            this.terminateOne(ws);
+            this.terminateOne(wsStream);
         });
 
-        ws.on('close', () => {
+        wsStream.on('close', () => {
             log.debug('wsstream close');
-            this.releaseOne();
+            this.releaseOne(wsStream);
         });
 
-        ws.once('data', (data) => {
+        wsStream.once('data', (data) => {
             // let method_line = data.toString().split('\r\n', 1)[0];
             // let [method, path, version] = method_line.split(' ');
 
             // deleting here is just a safety kinda thing (i think)
             // welp! not currently just a safety thing, this is required to make it work FIXME
-            let deleted = this.releaseOne(ws);
+            let deleted = this.releaseOne(wsStream);
             if (deleted) {
                 //log.warn('received data on a socket still in the pool!');
             }
         });
 
-        this.initHeartbeat(ws);
+        this.initHeartbeat(wsStream);
         this.emitStatus();
     }
 
 
-    initHeartbeat(ws) {
+    initHeartbeat(ws: WSStream): void {
         ws.socket.isAlive = true;
         let interval = setInterval( () => {
             this.sendHeartbeat(ws);
@@ -73,7 +80,7 @@ export default class WSPool extends EventEmitter {
     }
 
 
-    sendHeartbeat(ws) {
+    sendHeartbeat(ws: WSStream): void {
         if (ws.socket.isAlive === false) {
             this.terminateOne(ws);
         } else {
@@ -86,14 +93,14 @@ export default class WSPool extends EventEmitter {
     }
 
 
-    stopHeartbeat(ws) {
+    stopHeartbeat(ws: WSStream): void {
         clearInterval(this.intervals.get(ws));
         this.intervals.delete(ws);
     }
 
 
-    async grabOne() {  // wondering if this needs to be async? grabOne in HubWSPool definitely does
-        let ws;
+    async grabOne(): Promise<WSStream | undefined> {  // wondering if this needs to be async? grabOne in HubWSPool definitely does
+        let ws: WSStream;
 
         ws = this.pool.keys().next().value;
         this.releaseOne(ws);
@@ -110,7 +117,7 @@ export default class WSPool extends EventEmitter {
     }
 
 
-    getStatus() {
+    getStatus(): any {
         let status = {
             pool_size: this.pool.size,
         };
@@ -118,28 +125,29 @@ export default class WSPool extends EventEmitter {
     }
 
 
-    emitStatus() {
+    emitStatus(): void {
         let status = this.getStatus();
         this.emit('status', status);
         log.debug(status);
     }
 
 
-    closeAll() {
+    closeAll(): void {
         for (let ws of Array.from(this.pool)) {
             ws.close();
         }
     }
 
 
-    clearAll() {
+    clearAll(): void {
         this.pool.clear();
     }
 
 
-    releaseOne(ws) {
-        this.stopHeartbeat(ws);
-        let deleted = this.pool.delete(ws);
+    releaseOne(ws: stream.Duplex): boolean {
+        let wsStream = ws as WSStream;
+        this.stopHeartbeat(wsStream);
+        let deleted = this.pool.delete(wsStream);
         if (deleted) {
             this.emitStatus();
         }
@@ -147,19 +155,20 @@ export default class WSPool extends EventEmitter {
     }
 
 
-    terminateOne(ws) {
-        this.releaseOne(ws);
-        ws.socket.removeAllListeners();
-        ws.removeAllListeners();
-        if (ws.socket.readyState > 0) {  // 0 = CONNECTING
-            ws.socket.terminate();
+    terminateOne(ws: stream.Duplex): void {
+        let wsStream = ws as WSStream;
+        this.releaseOne(wsStream);
+        wsStream.socket.removeAllListeners();
+        wsStream.removeAllListeners();
+        if (wsStream.socket.readyState > 0) {  // 0 = CONNECTING
+            wsStream.socket.terminate();
         }
-        ws.destroy();
+        wsStream.destroy();
     }
 
 
-    destroy() {
-        let destroy_list;
+    destroy(): void {
+        let destroy_list: WSStream[];
         destroy_list = Array.from(this.pool);
         for (let ws of destroy_list) {
             this.terminateOne(ws);

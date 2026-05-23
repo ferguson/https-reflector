@@ -1,5 +1,7 @@
+import stream = require('stream');
 import WSPool from './WSPool';
-import UplinkWS from './UplinkWS';
+import { createUplinkWS } from './UplinkWS';
+import { UplinkWSOptions, UplinkConnectorOptions } from './types';
 
 const log = {...console};
 log.debug = ()=>{};
@@ -8,7 +10,11 @@ const DEFAULT_POOL_SIZE = 10;
 
 
 export default class UplinkWSPool extends WSPool {
-    constructor(hub_uplink_ws_url, options) {
+    hub_uplink_ws_url: string;
+    ws_options: UplinkWSOptions;
+    pool_size: number;
+
+    constructor(hub_uplink_ws_url: string, options: UplinkConnectorOptions) {
         super();
         this.hub_uplink_ws_url = hub_uplink_ws_url;
 
@@ -22,31 +28,23 @@ export default class UplinkWSPool extends WSPool {
     }
 
 
-    fillPool() {
+    fillPool(): void {
         while (this.getPoolSize() < this.pool_size) {
-            let ws = new UplinkWS(this.hub_uplink_ws_url, this.ws_options);
+            let ws = createUplinkWS(this.hub_uplink_ws_url, this.ws_options);
             this.addOne(ws);
-
-            ws.on('close', async () => {
-                this.fillPool();
-            });
-
-            ws.on('error', (error) => {
-                this.fillPool();
-            });
-
-            ws.socket.on('error', (error) => {
-                this.fillPool();
-            });
-
-            // just a safety measure
-            ws.once('data', () => {
-                this.fillPool();
-            });
-
-            ws.socket.on('ping', () => {
-                log.debug('ping');
-            });
         }
+    }
+
+
+    releaseOne(ws: stream.Duplex): boolean {
+        let deleted = super.releaseOne(ws);
+        if (deleted) this.fillPool();
+        return deleted;
+    }
+
+
+    terminateOne(ws: stream.Duplex): void {
+        super.terminateOne(ws);
+        this.fillPool();
     }
 }
