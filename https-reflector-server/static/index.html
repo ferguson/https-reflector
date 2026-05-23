@@ -1,12 +1,57 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta http-equiv="refresh" content="0; url=/admin" />
-  <title>HTTPS Reflector</title>
+    <title>Otto Hub</title>
+    <style>
+      body {
+        margin: 0;
+        width: 100vw;
+        height: 100vh;
+        font-family: Verdana, "Helvetica Neue", Helvetica, Arial, sans-serif;
+        color: #BF6F04;
+        background-color: #333333;
+        text-rendering: optimizeLegibility;
+      }
+      nav {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        z-index: 999;
+        background-color: transparent;
+      }
+      section {
+        width: 100%;
+        text-align: center;
+      }
+      iframe {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        border: 0;
+      }
+    </style>
 </head>
+
 <body>
-  <a href="/admin">Status dashboard</a>
+  <br>
+  <br>
+  <br>
+  <br>
+  <br>
+  <center><h2>Waiting for otto to come online</h2></center>
+
+  <script>
+    var protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    var ws = new WebSocket(protocol + '//' + window.location.host + '/https-reflector/status.ws');
+    ws.addEventListener('message', function(message) {
+        var data;
+        try { data = JSON.parse(message.data); } catch(err) { return; }
+        var devices = data && data.devices;
+        if (devices && Object.keys(devices).some(function(k) { return devices[k].connected; })) {
+            window.location.reload();
+        }
+    });
+  </script>
 </body>
 </html>
