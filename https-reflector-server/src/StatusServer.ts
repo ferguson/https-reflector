@@ -15,6 +15,7 @@ export default class StatusServer {
         this.clients  = new Set();
 
         tracker.onUpdate = () => this.broadcast();
+        setInterval(() => this.broadcast(), 5000);
     }
 
 

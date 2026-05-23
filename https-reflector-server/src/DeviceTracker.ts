@@ -13,12 +13,14 @@ export default class DeviceTracker {
     devices: Map<string, DeviceRecord>;
     dataDir: string;
     onUpdate: () => void;
+    serverStartAt: number;
     private saveTimer: NodeJS.Timeout | null;
 
     constructor(dataDir: string) {
         this.dataDir = dataDir;
         this.devices = new Map();
         this.onUpdate = () => {};
+        this.serverStartAt = Date.now();
         this.saveTimer = null;
     }
 
@@ -117,7 +119,7 @@ export default class DeviceTracker {
                 bytesOut:           rec.bytesOut,
             };
         }
-        return { ts: Date.now(), devices };
+        return { ts: Date.now(), serverStartAt: this.serverStartAt, devices };
     }
 
 

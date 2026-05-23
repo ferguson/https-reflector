@@ -8,8 +8,6 @@
     :root {
       --bg:       #3A5366;
       --bg-dark:  #2E4555;
-      --bg-card:  #324d5e;
-      --bg-stale: #2a3f4e;
       --cyan:     #41B9C3;
       --cyan-lt:  #96EEF2;
       --navy:     #0E2446;
@@ -25,16 +23,15 @@
       font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
       background: var(--bg);
       color: var(--white);
-      font-size: 15px;
-      line-height: 22px;
+      font-size: 14px;
+      line-height: 20px;
       min-height: 100vh;
-      padding-bottom: 2rem;
     }
 
     /* ── Header ── */
     .header {
       background: var(--bg-dark);
-      padding: 14px 24px;
+      padding: 12px 20px;
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -43,11 +40,17 @@
       top: 0;
       z-index: 10;
     }
+    .header-left { display: flex; flex-direction: column; gap: 3px; }
     .header h1 {
-      font-size: 18px;
+      font-size: 17px;
       font-weight: 700;
       color: var(--cyan);
       letter-spacing: 0.3px;
+    }
+    #server-info {
+      font-size: 12px;
+      color: var(--gray);
+      min-height: 16px;
     }
     .header-right {
       display: flex;
@@ -62,7 +65,7 @@
     }
     .ws-dot.live { background: var(--cyan); }
     #header-ts {
-      font-size: 13px;
+      font-size: 12px;
       color: var(--gray-lt);
     }
 
@@ -101,91 +104,90 @@
     #pw-submit:hover { background: var(--cyan-lt); }
 
     /* ── Dashboard ── */
-    #dashboard { display: none; }
+    #dashboard { display: none; padding: 16px 20px; }
 
-    .section-label {
+    /* ── Table ── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    thead th {
+      background: var(--bg-dark);
+      color: var(--gray);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      padding: 8px 12px;
+      text-align: left;
+      border-bottom: 1px solid rgba(65,185,195,0.3);
+      position: sticky;
+      top: 66px;
+      z-index: 5;
+    }
+    thead th.num { text-align: right; }
+
+    tbody tr {
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    tbody tr:hover { background: rgba(65,185,195,0.05); }
+
+    tbody td {
+      padding: 8px 12px;
+      vertical-align: middle;
+    }
+    tbody td.num {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      color: var(--gray-lt);
+    }
+
+    tr.live td:first-child {
+      border-left: 3px solid var(--cyan);
+      padding-left: 9px;
+    }
+    tr.stale td:first-child {
+      border-left: 3px solid transparent;
+      padding-left: 9px;
+    }
+
+    .dev-name { font-weight: 600; color: var(--white); }
+    tr.stale .dev-name { color: var(--gray-lt); }
+
+    .status-live { color: var(--cyan); font-weight: 700; font-size: 12px; }
+    .status-off  { color: var(--gray); font-size: 12px; }
+
+    .since { color: var(--gray-lt); }
+
+    .restart-badge {
+      font-size: 10px;
+      background: rgba(65,185,195,0.2);
+      color: var(--cyan);
+      border-radius: 4px;
+      padding: 1px 5px;
+      margin-left: 6px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      white-space: nowrap;
+    }
+
+    tr.section-sep td {
+      padding: 14px 12px 6px;
       font-size: 11px;
       font-weight: 700;
       letter-spacing: 1.2px;
       text-transform: uppercase;
       color: var(--gray);
-      padding: 20px 24px 8px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      background: var(--bg);
     }
 
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-      gap: 12px;
-      padding: 0 24px;
-    }
-
-    /* ── Cards ── */
-    .card {
-      background: var(--bg-card);
-      border: 1px solid rgba(65, 185, 195, 0.2);
-      border-radius: 10px;
-      overflow: hidden;
-    }
-    .card:hover { border-color: var(--cyan); }
-    .card.stale {
-      background: var(--bg-stale);
-      border-color: rgba(255,255,255,0.06);
-    }
-    .card.stale:hover { border-color: rgba(255,255,255,0.18); }
-
-    .card-name {
-      padding: 7px 12px;
-      font-weight: 700;
-      font-size: 14px;
-      background: var(--cyan);
-      color: var(--navy);
-    }
-    .card.stale .card-name {
-      background: #3a5465;
-      color: var(--gray-lt);
-    }
-
-    .card-body {
-      padding: 10px 12px;
-      display: flex;
-      flex-direction: column;
-      gap: 5px;
-    }
-
-    .status-badge {
-      display: flex;
-      align-items: center;
-      gap: 5px;
-      font-size: 12px;
-      font-weight: 700;
-      letter-spacing: 0.3px;
-      color: var(--cyan);
-      margin-bottom: 2px;
-    }
-    .status-badge.offline { color: var(--gray); }
-
-    .dot-live {
-      display: inline-block;
-      width: 7px; height: 7px;
-      border-radius: 50%;
-      background: var(--cyan);
-      flex-shrink: 0;
-    }
-    .status-badge.offline .dot-live { background: var(--gray); }
-
-    .stat-row {
-      display: flex;
-      justify-content: space-between;
-      font-size: 13px;
-    }
-    .stat-label { color: var(--gray); }
-    .stat-val { color: var(--gray-lt); font-variant-numeric: tabular-nums; }
-
-    .empty {
-      padding: 8px 24px;
+    #empty-msg {
       color: var(--gray);
-      font-size: 14px;
       font-style: italic;
+      padding: 20px 0;
       display: none;
     }
   </style>
@@ -193,7 +195,10 @@
 <body>
 
 <div class="header">
-  <h1>HTTPS Reflector</h1>
+  <div class="header-left">
+    <h1>HTTPS Reflector</h1>
+    <div id="server-info"></div>
+  </div>
   <div class="header-right">
     <span class="ws-dot" id="ws-dot"></span>
     <span id="header-ts">connecting…</span>
@@ -208,37 +213,66 @@
 </div>
 
 <div id="dashboard">
-  <div class="section-label">CONNECTED / TODAY</div>
-  <div class="grid" id="grid-active"></div>
-  <div class="empty" id="empty-active">No active devices today</div>
-
-  <div class="section-label" id="label-old" style="display:none">PREVIOUSLY CONNECTED</div>
-  <div class="grid" id="grid-old"></div>
-  <div class="empty" id="empty-old"></div>
+  <table id="tbl">
+    <thead>
+      <tr>
+        <th>Device</th>
+        <th>Status</th>
+        <th>Since</th>
+        <th class="num">Connections</th>
+        <th class="num">Requests</th>
+        <th class="num">In</th>
+        <th class="num">Out</th>
+      </tr>
+    </thead>
+    <tbody id="tbl-body"></tbody>
+  </table>
+  <div id="empty-msg">No devices seen yet</div>
 </div>
 
 <script>
 (function () {
   var ws = null;
 
-  var authDiv  = document.getElementById('auth');
-  var dashboard = document.getElementById('dashboard');
-  var authError = document.getElementById('auth-error');
-  var pwInput  = document.getElementById('pw-input');
-  var pwSubmit = document.getElementById('pw-submit');
-  var headerTs = document.getElementById('header-ts');
-  var wsDot    = document.getElementById('ws-dot');
+  var authDiv    = document.getElementById('auth');
+  var dashboard  = document.getElementById('dashboard');
+  var authError  = document.getElementById('auth-error');
+  var pwInput    = document.getElementById('pw-input');
+  var pwSubmit   = document.getElementById('pw-submit');
+  var headerTs   = document.getElementById('header-ts');
+  var serverInfo = document.getElementById('server-info');
+  var wsDot      = document.getElementById('ws-dot');
 
   function setConnected(on) {
     wsDot.className = 'ws-dot' + (on ? ' live' : '');
   }
 
+  var savedPassword = null;
+  var reconnectTimer = null;
+  var reconnectDelay = 1000;
+  var lastSnapshot = null;
+
+  setInterval(function () {
+    if (lastSnapshot) render(lastSnapshot);
+  }, 1000);
+
+  function scheduleReconnect() {
+    if (reconnectTimer) return;
+    reconnectTimer = setTimeout(function () {
+      reconnectTimer = null;
+      connect(savedPassword);
+    }, reconnectDelay);
+    reconnectDelay = Math.min(reconnectDelay * 2, 30000);
+  }
+
   function connect(password) {
+    savedPassword = password;
     if (ws) { try { ws.close(); } catch(e) {} }
     var proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
     ws = new WebSocket(proto + location.host + '/https-reflector/status.ws');
 
     ws.onopen = function () {
+      reconnectDelay = 1000;
       setConnected(true);
       if (password != null) ws.send(password);
     };
@@ -246,6 +280,7 @@
     ws.onmessage = function (evt) {
       var data;
       try { data = JSON.parse(evt.data); } catch(e) { return; }
+      lastSnapshot = data;
       authDiv.style.display   = 'none';
       dashboard.style.display = 'block';
       render(data);
@@ -254,19 +289,26 @@
     ws.onclose = function (evt) {
       setConnected(false);
       if (evt.code === 4401) {
+        // auth failure — don't reconnect, show password prompt
+        savedPassword = null;
         authDiv.style.display   = '';
         dashboard.style.display = 'none';
         authError.style.display = '';
         pwInput.value = '';
         pwInput.focus();
-      } else if (dashboard.style.display === 'block') {
-        headerTs.textContent = 'Disconnected — reload to reconnect';
+      } else {
+        if (dashboard.style.display === 'block') {
+          headerTs.textContent = 'Reconnecting…';
+        }
+        scheduleReconnect();
       }
     };
   }
 
   pwSubmit.onclick = function () {
     authError.style.display = 'none';
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+    reconnectDelay = 1000;
     connect(pwInput.value);
   };
   pwInput.onkeydown = function (e) {
@@ -303,41 +345,58 @@
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
 
-  function row(label, val) {
-    return '<div class="stat-row"><span class="stat-label">' + label + '</span>'
-         + '<span class="stat-val">' + esc(val) + '</span></div>';
-  }
+  var RESTART_TOLERANCE_MS = 60 * 1000;
 
-  function makeCard(name, rec) {
-    var card = document.createElement('div');
+  function makeRow(name, rec, serverStartAt) {
+    var tr = document.createElement('tr');
+    var statusHtml, sinceHtml;
 
-    var todayMidnight = new Date(); todayMidnight.setHours(0,0,0,0);
-    var active = rec.connected || (rec.lastConnectedAt && rec.lastConnectedAt >= todayMidnight.getTime());
-    card.className = 'card' + (active ? '' : ' stale');
-
-    var badge, rows = '';
     if (rec.connected) {
+      tr.className = 'live';
       var dur = rec.sessionStartAt ? fmtDur(Date.now() - rec.sessionStartAt) : '—';
-      badge = '<div class="status-badge"><span class="dot-live"></span>LIVE &nbsp;' + esc(dur) + '</div>';
-      if (rec.sessionStartAt) rows += row('Since', fmtTime(rec.sessionStartAt));
+      statusHtml = '<span class="status-live">● LIVE &nbsp;' + esc(dur) + '</span>';
+      if (rec.sessionStartAt) {
+        sinceHtml = '<span class="since">' + esc(fmtTime(rec.sessionStartAt)) + '</span>';
+        if (serverStartAt && Math.abs(rec.sessionStartAt - serverStartAt) < RESTART_TOLERANCE_MS) {
+          sinceHtml += '<span class="restart-badge">&#x21BB; restart</span>';
+        }
+      } else {
+        sinceHtml = '<span class="since">—</span>';
+      }
     } else {
-      var ago = rec.lastDisconnectedAt ? fmtAgo(rec.lastDisconnectedAt) : 'never';
-      badge = '<div class="status-badge offline"><span class="dot-live"></span>' + esc(ago) + '</div>';
-      if (rec.lastConnectedAt) rows += row('Last seen', fmtTime(rec.lastConnectedAt));
+      tr.className = 'stale';
+      var lastSeen = rec.lastDisconnectedAt ? fmtAgo(rec.lastDisconnectedAt) : 'never';
+      statusHtml = '<span class="status-off">○ ' + esc(lastSeen) + '</span>';
+      sinceHtml  = rec.lastConnectedAt
+        ? '<span class="since">' + esc(fmtTime(rec.lastConnectedAt)) + '</span>'
+        : '<span class="since">—</span>';
     }
 
-    rows += row('Connections', rec.connectionCount.toLocaleString());
-    rows += row('Requests',    rec.requestCount.toLocaleString());
-    rows += row('In',          fmtBytes(rec.bytesIn));
-    rows += row('Out',         fmtBytes(rec.bytesOut));
+    tr.innerHTML =
+      '<td><span class="dev-name">' + esc(name) + '</span></td>' +
+      '<td>' + statusHtml + '</td>' +
+      '<td>' + sinceHtml + '</td>' +
+      '<td class="num">' + rec.connectionCount.toLocaleString() + '</td>' +
+      '<td class="num">' + rec.requestCount.toLocaleString() + '</td>' +
+      '<td class="num">' + esc(fmtBytes(rec.bytesIn)) + '</td>' +
+      '<td class="num">' + esc(fmtBytes(rec.bytesOut)) + '</td>';
 
-    card.innerHTML = '<div class="card-name">' + esc(name) + '</div>'
-                   + '<div class="card-body">' + badge + rows + '</div>';
-    return card;
+    return tr;
+  }
+
+  function makeSepRow(label) {
+    var tr = document.createElement('tr');
+    tr.className = 'section-sep';
+    tr.innerHTML = '<td colspan="7">' + esc(label) + '</td>';
+    return tr;
   }
 
   function render(snapshot) {
     headerTs.textContent = 'Updated ' + new Date(snapshot.ts).toLocaleTimeString();
+
+    if (snapshot.serverStartAt) {
+      serverInfo.textContent = 'Server started ' + fmtAgo(snapshot.serverStartAt);
+    }
 
     var cutoff = new Date(); cutoff.setHours(0,0,0,0);
     var cut = cutoff.getTime();
@@ -353,33 +412,25 @@
       }
     }
 
-    var gA = document.getElementById('grid-active');
-    var gO = document.getElementById('grid-old');
-    var eA = document.getElementById('empty-active');
-    var eO = document.getElementById('empty-old');
-    var lO = document.getElementById('label-old');
+    var tbody   = document.getElementById('tbl-body');
+    var emptyMsg = document.getElementById('empty-msg');
+    tbody.innerHTML = '';
 
-    gA.innerHTML = '';
-    gO.innerHTML = '';
+    var serverStartAt = snapshot.serverStartAt || null;
 
-    if (active.length) {
-      eA.style.display = 'none';
+    if (active.length === 0 && old.length === 0) {
+      emptyMsg.style.display = '';
+    } else {
+      emptyMsg.style.display = 'none';
       for (var j = 0; j < active.length; j++) {
-        gA.appendChild(makeCard(active[j], snapshot.devices[active[j]]));
+        tbody.appendChild(makeRow(active[j], snapshot.devices[active[j]], serverStartAt));
       }
-    } else {
-      eA.style.display = '';
-    }
-
-    if (old.length) {
-      lO.style.display = '';
-      eO.style.display = 'none';
-      for (var k = 0; k < old.length; k++) {
-        gO.appendChild(makeCard(old[k], snapshot.devices[old[k]]));
+      if (old.length > 0) {
+        tbody.appendChild(makeSepRow('Previously Connected'));
+        for (var k = 0; k < old.length; k++) {
+          tbody.appendChild(makeRow(old[k], snapshot.devices[old[k]], serverStartAt));
+        }
       }
-    } else {
-      lO.style.display = 'none';
-      eO.style.display = 'none';
     }
   }
 
