@@ -8,13 +8,15 @@ const log = {...console};
 export default class StatusServer {
     private clients: Set<any>;
     private password: string | null;
+    private hostnames: string[];
     tracker: DeviceTracker;
     waitServer: WaitServer | null;
 
-    constructor(tracker: DeviceTracker, waitServer: WaitServer | null, password: string | null) {
+    constructor(tracker: DeviceTracker, waitServer: WaitServer | null, password: string | null, hostnames: string[] = []) {
         this.tracker    = tracker;
         this.waitServer = waitServer;
         this.password   = password || null;
+        this.hostnames  = hostnames;
         this.clients    = new Set();
 
         tracker.onUpdate = () => this.broadcast();
@@ -45,6 +47,7 @@ export default class StatusServer {
 
     private buildSnapshot(): object {
         const snap: any = this.tracker.getSnapshot();
+        snap.hostnames = this.hostnames;
         if (this.waitServer) {
             snap.waiting        = this.waitServer.getWaiters();
             snap.failedAttempts = this.waitServer.getFailedAttempts();

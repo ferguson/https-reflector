@@ -49,7 +49,7 @@ export default class Hub {
         const dataDir = options.data_dir || DEFAULT_DATA_DIR;
         this.deviceTracker = new DeviceTracker(dataDir);
         this.waitServer    = new WaitServer(this.deviceTracker);
-        this.statusServer  = new StatusServer(this.deviceTracker, this.waitServer, options.status_password || null);
+        this.statusServer  = new StatusServer(this.deviceTracker, this.waitServer, options.status_password || null, this.hostnames);
         this.connector_manager = new ConnectorManager(this.deviceTracker);
     }
 
