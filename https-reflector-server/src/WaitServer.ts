@@ -7,10 +7,12 @@ const log = {...console};
 export default class WaitServer {
     private waiters: Map<string, Set<any>>;
     private tracker: DeviceTracker;
+    onWaitersChanged: () => void;
 
     constructor(tracker: DeviceTracker) {
         this.tracker = tracker;
         this.waiters = new Map();
+        this.onWaitersChanged = () => {};
 
         tracker.onConnect = (devicename: string) => this.notifyWaiters(devicename);
     }
@@ -33,14 +35,25 @@ export default class WaitServer {
         if (!set) { set = new Set(); this.waiters.set(devicename, set); }
         set.add(ws);
         log.log(`WaitServer: ${devicename} has ${set.size} waiter(s)`);
+        this.onWaitersChanged();
 
         ws.on('close', () => {
             const s = this.waiters.get(devicename);
             if (s) {
                 s.delete(ws);
                 if (s.size === 0) this.waiters.delete(devicename);
+                this.onWaitersChanged();
             }
         });
+    }
+
+
+    getWaiters(): { [name: string]: number } {
+        const result: { [name: string]: number } = {};
+        for (const [name, set] of this.waiters) {
+            result[name] = set.size;
+        }
+        return result;
     }
 
 
@@ -55,5 +68,6 @@ export default class WaitServer {
             }
         }
         this.waiters.delete(devicename);
+        this.onWaitersChanged();
     }
 }

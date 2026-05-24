@@ -184,6 +184,23 @@
       background: var(--bg);
     }
 
+    tr.waiting td:first-child {
+      border-left: 3px solid var(--orange);
+      padding-left: 9px;
+    }
+    .status-wait { color: var(--orange); font-size: 12px; }
+    .new-badge {
+      font-size: 10px;
+      background: rgba(255, 98, 29, 0.18);
+      color: var(--orange);
+      border-radius: 4px;
+      padding: 1px 5px;
+      margin-left: 6px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      white-space: nowrap;
+    }
+
     #empty-msg {
       color: var(--gray);
       font-style: italic;
@@ -391,6 +408,23 @@
     return tr;
   }
 
+  function makeWaitRow(name, count, isNew) {
+    var tr = document.createElement('tr');
+    tr.className = 'waiting';
+    var countStr = count === 1 ? '1 waiting' : count + ' waiting';
+    var nameCellHtml = '<span class="dev-name">' + esc(name) + '</span>'
+      + (isNew ? '<span class="new-badge">never seen</span>' : '');
+    tr.innerHTML =
+      '<td>' + nameCellHtml + '</td>' +
+      '<td><span class="status-wait">◌ ' + esc(countStr) + '</span></td>' +
+      '<td><span class="since">—</span></td>' +
+      '<td class="num">—</td>' +
+      '<td class="num">—</td>' +
+      '<td class="num">—</td>' +
+      '<td class="num">—</td>';
+    return tr;
+  }
+
   function render(snapshot) {
     headerTs.textContent = 'Updated ' + new Date(snapshot.ts).toLocaleTimeString();
 
@@ -418,13 +452,27 @@
 
     var serverStartAt = snapshot.serverStartAt || null;
 
-    if (active.length === 0 && old.length === 0) {
+    var waitingNames = Object.keys(snapshot.waiting || {}).sort();
+
+    if (active.length === 0 && waitingNames.length === 0 && old.length === 0) {
       emptyMsg.style.display = '';
     } else {
       emptyMsg.style.display = 'none';
+
       for (var j = 0; j < active.length; j++) {
         tbody.appendChild(makeRow(active[j], snapshot.devices[active[j]], serverStartAt));
       }
+
+      if (waitingNames.length > 0) {
+        tbody.appendChild(makeSepRow('Waiting to Come Online'));
+        for (var w = 0; w < waitingNames.length; w++) {
+          var wName = waitingNames[w];
+          var wCount = snapshot.waiting[wName];
+          var isNew = !snapshot.devices || !snapshot.devices[wName];
+          tbody.appendChild(makeWaitRow(wName, wCount, isNew));
+        }
+      }
+
       if (old.length > 0) {
         tbody.appendChild(makeSepRow('Previously Connected'));
         for (var k = 0; k < old.length; k++) {

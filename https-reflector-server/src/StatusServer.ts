@@ -1,5 +1,6 @@
 import WebSocket = require('ws');
 import DeviceTracker from './DeviceTracker';
+import WaitServer from './WaitServer';
 
 const log = {...console};
 
@@ -8,13 +9,18 @@ export default class StatusServer {
     private clients: Set<any>;
     private password: string | null;
     tracker: DeviceTracker;
+    waitServer: WaitServer | null;
 
-    constructor(tracker: DeviceTracker, password: string | null) {
-        this.tracker  = tracker;
-        this.password = password || null;
-        this.clients  = new Set();
+    constructor(tracker: DeviceTracker, waitServer: WaitServer | null, password: string | null) {
+        this.tracker    = tracker;
+        this.waitServer = waitServer;
+        this.password   = password || null;
+        this.clients    = new Set();
 
         tracker.onUpdate = () => this.broadcast();
+        if (waitServer) {
+            waitServer.onWaitersChanged = () => this.broadcast();
+        }
         setInterval(() => this.broadcast(), 5000);
     }
 
@@ -37,9 +43,18 @@ export default class StatusServer {
     }
 
 
+    private buildSnapshot(): object {
+        const snap: any = this.tracker.getSnapshot();
+        if (this.waitServer) {
+            snap.waiting = this.waitServer.getWaiters();
+        }
+        return snap;
+    }
+
+
     broadcast(): void {
         if (this.clients.size === 0) return;
-        const payload = JSON.stringify(this.tracker.getSnapshot());
+        const payload = JSON.stringify(this.buildSnapshot());
         for (const ws of this.clients) {
             if (ws.readyState === WebSocket.OPEN) {
                 try { ws.send(payload); } catch (e) { /* ignore */ }
@@ -54,7 +69,7 @@ export default class StatusServer {
 
         // send current state immediately
         try {
-            ws.send(JSON.stringify(this.tracker.getSnapshot()));
+            ws.send(JSON.stringify(this.buildSnapshot()));
         } catch (e) { /* ignore */ }
 
         ws.on('close', () => {
