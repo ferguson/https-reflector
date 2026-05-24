@@ -46,7 +46,8 @@ export default class StatusServer {
     private buildSnapshot(): object {
         const snap: any = this.tracker.getSnapshot();
         if (this.waitServer) {
-            snap.waiting = this.waitServer.getWaiters();
+            snap.waiting        = this.waitServer.getWaiters();
+            snap.failedAttempts = this.waitServer.getFailedAttempts();
         }
         return snap;
     }

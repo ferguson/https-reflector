@@ -190,7 +190,15 @@
       border-left: 3px solid var(--orange);
       padding-left: 9px;
     }
+    tr.failed td:first-child {
+      border-left: 3px solid transparent;
+      padding-left: 9px;
+    }
+    tr.failed .dev-name { color: var(--gray); }
+    tr.failed td        { color: var(--gray); }
+
     .status-wait { color: var(--orange); font-size: 12px; }
+    .status-fail { color: var(--gray);   font-size: 12px; }
     .new-badge {
       font-size: 10px;
       background: rgba(255, 98, 29, 0.18);
@@ -410,6 +418,21 @@
     return tr;
   }
 
+  function makeFailedRow(name, rec) {
+    var tr = document.createElement('tr');
+    tr.className = 'failed';
+    var sessions = rec.count === 1 ? '1 session' : rec.count + ' sessions';
+    tr.innerHTML =
+      '<td><span class="dev-name">' + esc(name) + '</span></td>' +
+      '<td><span class="status-fail">✗ gave up (' + esc(sessions) + ')</span></td>' +
+      '<td><span class="since">' + esc(fmtAgo(rec.lastAt)) + '</span></td>' +
+      '<td class="num">—</td>' +
+      '<td class="num">—</td>' +
+      '<td class="num">—</td>' +
+      '<td class="num">—</td>';
+    return tr;
+  }
+
   function makeWaitRow(name, count, isNew) {
     var tr = document.createElement('tr');
     tr.className = 'waiting';
@@ -479,6 +502,15 @@
         tbody.appendChild(makeSepRow('Previously Connected'));
         for (var k = 0; k < old.length; k++) {
           tbody.appendChild(makeRow(old[k], snapshot.devices[old[k]], serverStartAt));
+        }
+      }
+
+      var failedAttempts = snapshot.failedAttempts || {};
+      var failedNames = Object.keys(failedAttempts).sort();
+      if (failedNames.length > 0) {
+        tbody.appendChild(makeSepRow('Unrecognized — Never Connected'));
+        for (var f = 0; f < failedNames.length; f++) {
+          tbody.appendChild(makeFailedRow(failedNames[f], failedAttempts[failedNames[f]]));
         }
       }
     }

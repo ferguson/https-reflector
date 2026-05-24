@@ -4,14 +4,22 @@ import DeviceTracker from './DeviceTracker';
 const log = {...console};
 
 
+interface FailedAttempt {
+    firstAt: number;
+    lastAt:  number;
+    count:   number;
+}
+
 export default class WaitServer {
-    private waiters: Map<string, Set<any>>;
+    private waiters:        Map<string, Set<any>>;
+    private failedAttempts: Map<string, FailedAttempt>;
     private tracker: DeviceTracker;
     onWaitersChanged: () => void;
 
     constructor(tracker: DeviceTracker) {
-        this.tracker = tracker;
-        this.waiters = new Map();
+        this.tracker        = tracker;
+        this.waiters        = new Map();
+        this.failedAttempts = new Map();
         this.onWaitersChanged = () => {};
 
         tracker.onConnect = (devicename: string) => this.notifyWaiters(devicename);
@@ -41,7 +49,20 @@ export default class WaitServer {
             const s = this.waiters.get(devicename);
             if (s) {
                 s.delete(ws);
-                if (s.size === 0) this.waiters.delete(devicename);
+                if (s.size === 0) {
+                    this.waiters.delete(devicename);
+                    // all waiters gave up and the device was never seen — record it
+                    if (!this.tracker.devices.has(devicename)) {
+                        const now = Date.now();
+                        const existing = this.failedAttempts.get(devicename);
+                        if (existing) {
+                            existing.lastAt = now;
+                            existing.count++;
+                        } else {
+                            this.failedAttempts.set(devicename, { firstAt: now, lastAt: now, count: 1 });
+                        }
+                    }
+                }
                 this.onWaitersChanged();
             }
         });
@@ -52,6 +73,15 @@ export default class WaitServer {
         const result: { [name: string]: number } = {};
         for (const [name, set] of this.waiters) {
             result[name] = set.size;
+        }
+        return result;
+    }
+
+
+    getFailedAttempts(): { [name: string]: FailedAttempt } {
+        const result: { [name: string]: FailedAttempt } = {};
+        for (const [name, rec] of this.failedAttempts) {
+            result[name] = rec;
         }
         return result;
     }
@@ -68,6 +98,8 @@ export default class WaitServer {
             }
         }
         this.waiters.delete(devicename);
+        // device came online — clear any failed attempt record for it
+        this.failedAttempts.delete(devicename);
         this.onWaitersChanged();
     }
 }
