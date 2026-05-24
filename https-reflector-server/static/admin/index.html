@@ -68,6 +68,18 @@
       font-size: 12px;
       color: var(--gray-lt);
     }
+    #logout-btn {
+      font-size: 11px;
+      color: var(--gray);
+      background: none;
+      border: 1px solid var(--gray);
+      border-radius: 4px;
+      padding: 2px 8px;
+      cursor: pointer;
+      font-family: inherit;
+      margin-left: 4px;
+    }
+    #logout-btn:hover { color: var(--white); border-color: var(--white); }
 
     /* ── Auth overlay ── */
     #auth {
@@ -229,6 +241,7 @@
   <div class="header-right">
     <span class="ws-dot" id="ws-dot"></span>
     <span id="header-ts">connecting…</span>
+    <button id="logout-btn" style="display:none">Logout</button>
   </div>
 </div>
 
@@ -270,14 +283,28 @@
   var serverInfo = document.getElementById('server-info');
   var wsDot      = document.getElementById('ws-dot');
 
-  function setConnected(on) {
-    wsDot.className = 'ws-dot' + (on ? ' live' : '');
-  }
+  var logoutBtn = document.getElementById('logout-btn');
 
+  var isConnected = false;
   var savedPassword = null;
   var reconnectTimer = null;
   var reconnectDelay = 1000;
+  var disconnectDisplayTimer = null;
   var lastSnapshot = null;
+
+  function setConnected(on) {
+    isConnected = on;
+    wsDot.className = 'ws-dot' + (on ? ' live' : '');
+    logoutBtn.style.display = on ? '' : 'none';
+  }
+
+  function showDisconnectedState() {
+    disconnectDisplayTimer = null;
+    wsDot.className = 'ws-dot';
+    if (dashboard.style.display === 'block') {
+      headerTs.textContent = 'Reconnecting…';
+    }
+  }
 
   setInterval(function () {
     if (lastSnapshot) render(lastSnapshot);
@@ -292,19 +319,39 @@
     reconnectDelay = Math.min(reconnectDelay * 2, 30000);
   }
 
+  function logout() {
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+    if (disconnectDisplayTimer) { clearTimeout(disconnectDisplayTimer); disconnectDisplayTimer = null; }
+    savedPassword = null;
+    isConnected = false;
+    if (ws) { try { ws.close(); } catch(e) {} ws = null; }
+    setConnected(false);
+    logoutBtn.style.display = 'none';
+    authDiv.style.display   = '';
+    dashboard.style.display = 'none';
+    authError.style.display = 'none';
+    pwInput.value = '';
+    headerTs.textContent = 'connecting…';
+    setTimeout(function () { pwInput.focus(); }, 50);
+  }
+
   function connect(password) {
     savedPassword = password;
     if (ws) { try { ws.close(); } catch(e) {} }
     var proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
     ws = new WebSocket(proto + location.host + '/https-reflector/status.ws');
+    var thisWs = ws;
 
     ws.onopen = function () {
+      if (ws !== thisWs) return;
+      if (disconnectDisplayTimer) { clearTimeout(disconnectDisplayTimer); disconnectDisplayTimer = null; }
       reconnectDelay = 1000;
       setConnected(true);
       if (password != null) ws.send(password);
     };
 
     ws.onmessage = function (evt) {
+      if (ws !== thisWs) return;
       var data;
       try { data = JSON.parse(evt.data); } catch(e) { return; }
       lastSnapshot = data;
@@ -314,23 +361,29 @@
     };
 
     ws.onclose = function (evt) {
-      setConnected(false);
+      if (ws !== thisWs) return;
       if (evt.code === 4401) {
         // auth failure — don't reconnect, show password prompt
+        if (disconnectDisplayTimer) { clearTimeout(disconnectDisplayTimer); disconnectDisplayTimer = null; }
         savedPassword = null;
+        setConnected(false);
+        logoutBtn.style.display = 'none';
         authDiv.style.display   = '';
         dashboard.style.display = 'none';
         authError.style.display = '';
         pwInput.value = '';
         pwInput.focus();
       } else {
-        if (dashboard.style.display === 'block') {
-          headerTs.textContent = 'Reconnecting…';
+        // delay showing disconnected state so brief reconnects are invisible
+        if (!disconnectDisplayTimer) {
+          disconnectDisplayTimer = setTimeout(showDisconnectedState, 1500);
         }
         scheduleReconnect();
       }
     };
   }
+
+  logoutBtn.onclick = logout;
 
   pwSubmit.onclick = function () {
     authError.style.display = 'none';
@@ -451,7 +504,9 @@
   }
 
   function render(snapshot) {
-    headerTs.textContent = 'Updated ' + new Date(snapshot.ts).toLocaleTimeString();
+    if (isConnected) {
+      headerTs.textContent = 'Updated ' + new Date(snapshot.ts).toLocaleTimeString();
+    }
 
     if (snapshot.serverStartAt) {
       serverInfo.textContent = 'Server started ' + fmtAgo(snapshot.serverStartAt);
