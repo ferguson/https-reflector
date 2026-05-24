@@ -24,6 +24,12 @@ class UplinkWS {
         this.uplink_to_port = options.uplink_to_port;
         this.ws = new WebSocketStream(this.hub_uplink_ws_url);
 
+        // Catch connection errors (e.g. DNS failure) immediately — WSPool.addOne()
+        // attaches its own handler later, but the error can fire before that.
+        this.ws.on('error', (err: any) => {
+            log.warn('uplink ws error', err.code || err.message);
+        });
+
         // this only works because we write the headers all-at-once on the other end?
         this.ws.once('data', (data: Buffer) => {
             this.handleData(data);

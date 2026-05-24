@@ -45,7 +45,7 @@ export default class WaitServer {
         log.log(`WaitServer: ${devicename} has ${set.size} waiter(s)`);
         this.onWaitersChanged();
 
-        ws.on('close', () => {
+        const cleanup = () => {
             const s = this.waiters.get(devicename);
             if (s) {
                 s.delete(ws);
@@ -65,7 +65,9 @@ export default class WaitServer {
                 }
                 this.onWaitersChanged();
             }
-        });
+        };
+        ws.on('close', cleanup);
+        ws.on('error', cleanup);
     }
 
 

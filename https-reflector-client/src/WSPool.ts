@@ -160,6 +160,10 @@ export default class WSPool extends EventEmitter {
         this.releaseOne(wsStream);
         wsStream.socket.removeAllListeners();
         wsStream.removeAllListeners();
+        // Absorb errors that fire during/after destroy (e.g. DNS failure
+        // surfacing from Duplexify._destroy after listeners were cleared).
+        wsStream.on('error', () => {});
+        wsStream.socket.on('error', () => {});
         if (wsStream.socket.readyState > 0) {  // 0 = CONNECTING
             wsStream.socket.terminate();
         }

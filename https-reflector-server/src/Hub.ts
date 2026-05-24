@@ -207,6 +207,10 @@ export default class Hub {
         if (!head) {
             socket.removeAllListeners();
         }
+        socket.on('error', (err) => {
+            log.debug('proxied socket error', err.code || err.message);
+            socket.destroy();
+        });
 
         log.debug('req.url', req.url);
         let ws = await this.connector_manager.getUplinkWS(devicename);

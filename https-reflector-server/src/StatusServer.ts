@@ -29,6 +29,8 @@ export default class StatusServer {
 
     addClient(ws: any): void {
         if (this.password) {
+            // absorb errors while waiting for the password message
+            ws.on('error', () => { ws.close(); });
             // wait for first message as password
             ws.once('message', (msg: any) => {
                 const attempt = msg.toString().trim();
