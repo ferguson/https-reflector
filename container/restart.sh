@@ -21,6 +21,8 @@ ARGS=(
     -v /etc/letsencrypt:/etc/letsencrypt:ro
     -v "$DATA_DIR":/data
     -v "$PUBLIC_DIR":/var/www/public:ro
+    --log-opt max-size=50m
+    --log-opt max-file=3
     -e HTTPS_REFLECTOR_HOSTNAME="$HOSTNAME"
     -e HTTPS_REFLECTOR_PUBLIC_STATIC_DIR=/var/www/public
     -e HTTPS_REFLECTOR_DATA_DIR=/data
