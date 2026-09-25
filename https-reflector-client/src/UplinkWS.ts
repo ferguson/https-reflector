@@ -6,8 +6,13 @@ import { PassThrough } from 'stream';
 
 import HeaderBlock from './HeaderBlock';
 import { UplinkWSOptions } from './types';
+import { CLIENT_VERSION, CLIENT_VERSION_HEADER } from './version';
 
 const log = {...console};
+
+// identify ourselves to the hub on every uplink (websocket-stream passes these through to ws)
+const WS_OPTIONS: any = { headers: {} };
+WS_OPTIONS.headers[CLIENT_VERSION_HEADER] = CLIENT_VERSION;
 
 
 class UplinkWS {
@@ -22,7 +27,7 @@ class UplinkWS {
         this.http_server_injection = options.http_server_injection;
         this.uplink_to_host = options.uplink_to_host;
         this.uplink_to_port = options.uplink_to_port;
-        this.ws = new WebSocketStream(this.hub_uplink_ws_url);
+        this.ws = new WebSocketStream(this.hub_uplink_ws_url, WS_OPTIONS);
 
         // Catch connection errors (e.g. DNS failure) immediately — WSPool.addOne()
         // attaches its own handler later, but the error can fire before that.

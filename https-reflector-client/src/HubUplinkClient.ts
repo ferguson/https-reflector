@@ -32,6 +32,7 @@ export default class HubUplinkClient {
 
     async init(devicename: string = null): Promise<void> {
         if (devicename) {
+            this.devicename = devicename;
             await this.startConnector(devicename);
         }
     }
@@ -72,7 +73,9 @@ export default class HubUplinkClient {
 
     stopConnector(): void {
         if (this.uplink_connector) {
-            this.uplink_connector.disconnect();
+            // stop(), not disconnect(): disconnect() schedules a reconnect, which
+            // resurrected the old connector alongside the new one on every name change
+            this.uplink_connector.stop();
             delete this.uplink_connector;
         }
 

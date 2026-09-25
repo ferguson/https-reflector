@@ -11,3 +11,9 @@ services:
       - /var/www/otto.stream:/var/www/public:ro
     env_file:
       - config.env
+    # the hub logs one line per proxied request; uncapped this grew to hundreds of MB
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"

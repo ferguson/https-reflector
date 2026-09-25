@@ -4,19 +4,26 @@ import io_client = require('socket.io-client');
 
 import UplinkWSPool from './UplinkWSPool';
 import { UplinkConnectorOptions } from './types';
+import { CLIENT_VERSION, CLIENT_VERSION_HEADER } from './version';
 
 const log = {...console};
 log.debug = ()=>{};
 
 const HEARTBEAT_INTERVAL_MS = 10 * 1000;  // 10 seconds
-const DEFAULT_RETRY_TIMEOUT_MS = 3000;  // 3 seconds
+const DEFAULT_RETRY_TIMEOUT_MS = 3000;  // 3 seconds, base delay
+const MAX_RETRY_TIMEOUT_MS = 60 * 1000;  // cap for the doubling retry delay
+const INUSE_RETRY_TIMEOUT_MS = 30 * 1000;  // floor when the hub says our name is taken
+const PROCEED_TIMEOUT_MS = 20 * 1000;  // how long to wait for the hub's 'proceed' after connecting
 
 
 export default class UplinkConnector extends EventEmitter {
     hub_url: string;
     connected: boolean;
+    stopped: boolean;
     heartbeat_interval: NodeJS.Timeout | null;
     retry_timeout: NodeJS.Timeout | null;
+    proceed_timeout: NodeJS.Timeout | null;
+    consecutive_failures: number;
     uplink_ws_pool: UplinkWSPool | null;
     hub_uplink_io_url: string;
     connector_ws_url: string;
@@ -29,8 +36,11 @@ export default class UplinkConnector extends EventEmitter {
         super();
         this.hub_url = hub_url;
         this.connected = false;
+        this.stopped = false;
         this.heartbeat_interval = null;
         this.retry_timeout = null;
+        this.proceed_timeout = null;
+        this.consecutive_failures = 0;
         this.uplink_ws_pool = null;
         this.connector_wsio = null;
         this.connector_ws = null;
@@ -60,19 +70,34 @@ export default class UplinkConnector extends EventEmitter {
 
 
     connect(): void {
+        if (this.stopped) {
+            return;
+        }
         //this.connect_old();
         this.connect_new();
     }
 
 
     connect_new(): void {
+        let extraHeaders: any = {};
+        extraHeaders[CLIENT_VERSION_HEADER] = CLIENT_VERSION;
         let opts = {
             reconnection: false,
             transports: ['websocket'],
             path: '/https-reflector/socket.io/',
+            extraHeaders: extraHeaders,  // identify our client version to the hub
         };
         this.connector_wsio = io_client(this.hub_uplink_io_url, opts);
         this.connector_wsio.connect();
+
+        // If the hub never says 'proceed' (it used to happen when two devices
+        // connected at once), don't sit on a half-open connection forever.
+        this.clearProceedTimeout();
+        this.proceed_timeout = setTimeout( () => {
+            this.proceed_timeout = null;
+            log.warn(`hub did not say proceed within ${PROCEED_TIMEOUT_MS} ms, reconnecting`);
+            this.close_or_error();
+        }, PROCEED_TIMEOUT_MS);
 
         this.connector_wsio.onAny( (event, ...args) => {
             log.debug('message from hub', event, ...args);
@@ -84,8 +109,14 @@ export default class UplinkConnector extends EventEmitter {
 
         this.connector_wsio.on('proceed', () => {
             log.log('hub says to proceed');
+            this.clearProceedTimeout();
+            this.consecutive_failures = 0;
             this.connected = true;
             this.emit('connected');
+            if (this.uplink_ws_pool) {
+                // a repeated 'proceed' on the same connection; keep the pool we have
+                return;
+            }
             this.uplink_ws_pool = new UplinkWSPool(this.hub_uplink_ws_url, this.pool_options);
             this.uplink_ws_pool.fillPool();
             // socket.io has its own heartbeat so this interval is unneeded; restore if ever
@@ -105,7 +136,7 @@ export default class UplinkConnector extends EventEmitter {
 
         this.connector_wsio.on('inuse', () => {
             log.warn(`devicename for url ${this.hub_url} is already in use on the hub`);
-            this.close_or_error();  // FIXME should probably delay longer than the default retry delay here?
+            this.close_or_error(INUSE_RETRY_TIMEOUT_MS);
         });
 
         this.connector_wsio.on('disconnect', (details) => {
@@ -149,21 +180,38 @@ export default class UplinkConnector extends EventEmitter {
     }
 
 
-    close_or_error(): void {
+    close_or_error(min_delay_ms: number = 0): void {
         this.disconnect();
-        this.reconnect();
+        this.reconnect(min_delay_ms);
     }
 
 
-    async reconnect(): Promise<void> {
+    // Delay doubles per consecutive failure (3s, 6s, 12s, ... capped at 60s)
+    // with +/-50% jitter, so a hub restart doesn't bring every device back at
+    // the exact same instant. Reset on 'proceed'.
+    retryDelay(min_delay_ms: number): number {
+        let exponent = Math.min(this.consecutive_failures, 6);
+        let base = Math.min(DEFAULT_RETRY_TIMEOUT_MS * Math.pow(2, exponent), MAX_RETRY_TIMEOUT_MS);
+        base = Math.max(base, min_delay_ms);
+        return Math.round(base * (0.5 + Math.random()));
+    }
+
+
+    async reconnect(min_delay_ms: number = 0): Promise<void> {
+        if (this.stopped) {
+            return;
+        }
         if (this.retry_timeout) {
             return;  // a reconnect is already pending
         }
+        let delay = this.retryDelay(min_delay_ms);
+        this.consecutive_failures++;
+        log.log(`reconnecting to hub in ${delay} ms`);
         await new Promise<void>( (resolve) => {
             this.retry_timeout = setTimeout( () => {
                 this.retry_timeout = null;
                 resolve();
-            }, DEFAULT_RETRY_TIMEOUT_MS);
+            }, delay);
         });
 
         this.connect();
@@ -181,22 +229,53 @@ export default class UplinkConnector extends EventEmitter {
     }
 
 
+    clearProceedTimeout(): void {
+        if (this.proceed_timeout) {
+            clearTimeout(this.proceed_timeout);
+            this.proceed_timeout = null;
+        }
+    }
+
+
     disconnect(): void {
         this.connected = false;
         this.emit('disconnected');
+        this.clearProceedTimeout();
         if (this.connector_wsio) {
-            this.connector_wsio.disconnect();
+            // Drop our listeners first: socket.io emits 'disconnect' synchronously
+            // from disconnect(), which would re-enter close_or_error().
+            let wsio = this.connector_wsio;
             delete this.connector_wsio;  // FIXME should reuse the client and use manual connect
+            try { wsio.offAny(); } catch (err) {}
+            wsio.removeAllListeners();
+            wsio.disconnect();
         }
         if (this.connector_ws) {
-            this.connector_ws.terminate();
+            let ws = this.connector_ws;
             delete this.connector_ws;
+            ws.removeAllListeners();
+            ws.on('error', () => {});
+            ws.terminate();
         }
         if (this.uplink_ws_pool) {
-            this.uplink_ws_pool.destroy();
+            let pool = this.uplink_ws_pool;
             delete this.uplink_ws_pool;
+            pool.destroy();
         }
         clearInterval(this.heartbeat_interval);
         this.heartbeat_interval = null;
+    }
+
+
+    // Permanent shutdown: disconnect and never reconnect. disconnect() alone
+    // used to leave a pending reconnect that resurrected the connector.
+    stop(): void {
+        this.stopped = true;
+        if (this.retry_timeout) {
+            clearTimeout(this.retry_timeout);
+            this.retry_timeout = null;
+        }
+        this.disconnect();
+        this.removeAllListeners();
     }
 }

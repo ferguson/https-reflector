@@ -5,6 +5,10 @@ import { DeviceRecord } from './types';
 const log = {...console};
 
 const SAVE_INTERVAL_MS = 30 * 1000;
+// Connect/disconnect used to rewrite the summary file synchronously every
+// time. During a reconnect storm that stalls the event loop, which times out
+// more socket.io connections, which causes more reconnects. Now they coalesce.
+const SAVE_DEBOUNCE_MS = 2 * 1000;
 const SUMMARY_FILE = 'reflector-summary.json';
 const EVENTS_FILE  = 'reflector-events.jsonl';
 
@@ -16,6 +20,7 @@ export default class DeviceTracker {
     onConnect: (devicename: string) => void;
     serverStartAt: number;
     private saveTimer: NodeJS.Timeout | null;
+    private saveDebounce: any;
 
     constructor(dataDir: string) {
         this.dataDir = dataDir;
@@ -24,6 +29,7 @@ export default class DeviceTracker {
         this.onConnect = () => {};
         this.serverStartAt = Date.now();
         this.saveTimer = null;
+        this.saveDebounce = null;
     }
 
 
@@ -39,33 +45,47 @@ export default class DeviceTracker {
             clearInterval(this.saveTimer);
             this.saveTimer = null;
         }
-        this.save();
+        if (this.saveDebounce) {
+            clearTimeout(this.saveDebounce);
+            this.saveDebounce = null;
+        }
+        this.save(true);  // synchronous: the process may be about to exit
     }
 
 
-    recordConnect(devicename: string): void {
+    private newRecord(now: number): DeviceRecord {
+        return {
+            firstSeenAt: now,
+            lastConnectedAt: null,
+            lastDisconnectedAt: null,
+            connectionCount: 0,
+            requestCount: 0,
+            bytesIn: 0,
+            bytesOut: 0,
+            connected: false,
+            sessionStartAt: null,
+            clientVersion: null,
+            lastRequestAt: null,
+            lastActivityAt: null,
+            activeTunnels: 0,
+        };
+    }
+
+
+    recordConnect(devicename: string, clientVersion: string | null = null): void {
         const now = Date.now();
         let rec = this.devices.get(devicename);
         if (!rec) {
-            rec = {
-                firstSeenAt: now,
-                lastConnectedAt: null,
-                lastDisconnectedAt: null,
-                connectionCount: 0,
-                requestCount: 0,
-                bytesIn: 0,
-                bytesOut: 0,
-                connected: false,
-                sessionStartAt: null,
-            };
+            rec = this.newRecord(now);
             this.devices.set(devicename, rec);
         }
         rec.connected = true;
         rec.lastConnectedAt = now;
         rec.sessionStartAt = now;
         rec.connectionCount++;
-        this.appendEvent({ ts: now, event: 'connect', device: devicename });
-        this.save();
+        rec.clientVersion = clientVersion;
+        this.appendEvent({ ts: now, event: 'connect', device: devicename, client: clientVersion });
+        this.scheduleSave();
         this.onUpdate();
         this.onConnect(devicename);
     }
@@ -85,7 +105,7 @@ export default class DeviceTracker {
             device: devicename,
             durationMs,
         });
-        this.save();
+        this.scheduleSave();
         this.onUpdate();
     }
 
@@ -94,6 +114,25 @@ export default class DeviceTracker {
         const rec = this.devices.get(devicename);
         if (!rec) return;
         rec.requestCount++;
+        rec.lastRequestAt = Date.now();
+        this.onUpdate();
+    }
+
+
+    // a proxied connection (browser <-> uplink) has been wired up / has finished
+    tunnelOpened(devicename: string): void {
+        const rec = this.devices.get(devicename);
+        if (!rec) return;
+        rec.activeTunnels++;
+        rec.lastActivityAt = Date.now();
+        this.onUpdate();
+    }
+
+    tunnelClosed(devicename: string): void {
+        const rec = this.devices.get(devicename);
+        if (!rec) return;
+        rec.activeTunnels = Math.max(0, rec.activeTunnels - 1);
+        rec.lastActivityAt = Date.now();
         this.onUpdate();
     }
 
@@ -103,7 +142,8 @@ export default class DeviceTracker {
         if (!rec) return;
         rec.bytesIn  += bytesIn;
         rec.bytesOut += bytesOut;
-        // no onUpdate() here — too frequent; dashboard refreshes on connect/disconnect
+        rec.lastActivityAt = Date.now();
+        // no onUpdate() here — too frequent; dashboard refreshes on connect/disconnect and every 5 s
     }
 
 
@@ -120,6 +160,10 @@ export default class DeviceTracker {
                 requestCount:       rec.requestCount,
                 bytesIn:            rec.bytesIn,
                 bytesOut:           rec.bytesOut,
+                clientVersion:      rec.clientVersion,
+                lastRequestAt:      rec.lastRequestAt,
+                lastActivityAt:     rec.lastActivityAt,
+                activeTunnels:      rec.activeTunnels,
             };
         }
         return { ts: Date.now(), serverStartAt: this.serverStartAt, devices };
@@ -134,17 +178,18 @@ export default class DeviceTracker {
             const data = JSON.parse(raw);
             for (const [name, saved] of Object.entries(data.devices || {})) {
                 const s = saved as any;
-                this.devices.set(name, {
-                    firstSeenAt:        s.firstSeenAt        != null ? s.firstSeenAt        : Date.now(),
-                    lastConnectedAt:    s.lastConnectedAt    != null ? s.lastConnectedAt    : null,
-                    lastDisconnectedAt: s.lastDisconnectedAt != null ? s.lastDisconnectedAt : null,
-                    connectionCount:    s.connectionCount    != null ? s.connectionCount    : 0,
-                    requestCount:       s.requestCount       != null ? s.requestCount       : 0,
-                    bytesIn:            s.bytesIn            != null ? s.bytesIn            : 0,
-                    bytesOut:           s.bytesOut           != null ? s.bytesOut           : 0,
-                    connected:    false,
-                    sessionStartAt: null,
-                });
+                const rec = this.newRecord(Date.now());
+                rec.firstSeenAt        = s.firstSeenAt        != null ? s.firstSeenAt        : rec.firstSeenAt;
+                rec.lastConnectedAt    = s.lastConnectedAt    != null ? s.lastConnectedAt    : null;
+                rec.lastDisconnectedAt = s.lastDisconnectedAt != null ? s.lastDisconnectedAt : null;
+                rec.connectionCount    = s.connectionCount    != null ? s.connectionCount    : 0;
+                rec.requestCount       = s.requestCount       != null ? s.requestCount       : 0;
+                rec.bytesIn            = s.bytesIn            != null ? s.bytesIn            : 0;
+                rec.bytesOut           = s.bytesOut           != null ? s.bytesOut           : 0;
+                rec.clientVersion      = s.clientVersion      != null ? s.clientVersion      : null;
+                rec.lastRequestAt      = s.lastRequestAt      != null ? s.lastRequestAt      : null;
+                rec.lastActivityAt     = s.lastActivityAt     != null ? s.lastActivityAt     : null;
+                this.devices.set(name, rec);
             }
             log.log(`DeviceTracker: loaded ${this.devices.size} device(s) from ${file}`);
         } catch (err) {
@@ -153,7 +198,16 @@ export default class DeviceTracker {
     }
 
 
-    save(): void {
+    private scheduleSave(): void {
+        if (this.saveDebounce) return;
+        this.saveDebounce = setTimeout(() => {
+            this.saveDebounce = null;
+            this.save();
+        }, SAVE_DEBOUNCE_MS);
+    }
+
+
+    save(sync: boolean = false): void {
         const file = path.join(this.dataDir, SUMMARY_FILE);
         const data: Record<string, object> = {};
         for (const [name, rec] of this.devices) {
@@ -165,23 +219,31 @@ export default class DeviceTracker {
                 requestCount:       rec.requestCount,
                 bytesIn:            rec.bytesIn,
                 bytesOut:           rec.bytesOut,
+                clientVersion:      rec.clientVersion,
+                lastRequestAt:      rec.lastRequestAt,
+                lastActivityAt:     rec.lastActivityAt,
             };
         }
-        try {
-            fs.writeFileSync(file, JSON.stringify({ savedAt: Date.now(), devices: data }, null, 2));
-        } catch (err) {
-            log.error('DeviceTracker: failed to save summary', err);
+        const json = JSON.stringify({ savedAt: Date.now(), devices: data }, null, 2);
+        if (sync) {
+            try {
+                fs.writeFileSync(file, json);
+            } catch (err) {
+                log.error('DeviceTracker: failed to save summary', err);
+            }
+            return;
         }
+        fs.writeFile(file, json, (err) => {
+            if (err) log.error('DeviceTracker: failed to save summary', err);
+        });
     }
 
 
     private appendEvent(obj: object): void {
         const file = path.join(this.dataDir, EVENTS_FILE);
-        try {
-            fs.appendFileSync(file, JSON.stringify(obj) + '\n');
-        } catch (err) {
-            log.error('DeviceTracker: failed to append event', err);
-        }
+        fs.appendFile(file, JSON.stringify(obj) + '\n', (err) => {
+            if (err) log.error('DeviceTracker: failed to append event', err);
+        });
     }
 
 

@@ -26,4 +26,8 @@ export interface DeviceRecord {
     bytesOut: number;
     connected: boolean;
     sessionStartAt: number | null;
+    clientVersion: string | null;   // from the x-https-reflector-client header; null = legacy client
+    lastRequestAt: number | null;   // last time a request was handed to this device
+    lastActivityAt: number | null;  // last time bytes moved through one of its tunnels
+    activeTunnels: number;          // proxied connections in flight right now (runtime only)
 }

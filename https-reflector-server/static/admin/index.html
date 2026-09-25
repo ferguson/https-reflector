@@ -124,6 +124,7 @@
 
     /* ── Dashboard ── */
     #dashboard { display: none; padding: 16px 20px; }
+    .table-wrap { overflow-x: auto; }
 
     /* ── Table ── */
     table {
@@ -145,6 +146,7 @@
       position: sticky;
       top: 66px;
       z-index: 5;
+      white-space: nowrap;
     }
     thead th.num { text-align: right; }
 
@@ -156,6 +158,7 @@
     tbody td {
       padding: 8px 12px;
       vertical-align: middle;
+      white-space: nowrap;
     }
     tbody td.num {
       text-align: right;
@@ -193,6 +196,44 @@
       letter-spacing: 0.3px;
       white-space: nowrap;
     }
+
+    /* ── Client version ── */
+    .client-ver { color: var(--gray-lt); font-variant-numeric: tabular-nums; font-size: 12px; }
+    .legacy-badge {
+      font-size: 10px;
+      background: rgba(255, 98, 29, 0.18);
+      color: var(--orange);
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      white-space: nowrap;
+    }
+    tr.stale .legacy-badge { opacity: 0.6; }
+
+    /* ── Uplinks ── */
+    .uplinks { font-variant-numeric: tabular-nums; font-size: 12px; color: var(--gray-lt); }
+    .uplinks .idle   { color: var(--white); font-weight: 600; }
+    .uplinks .active { color: var(--cyan);  font-weight: 600; }
+    .uplinks .waiting-n { color: var(--orange); font-weight: 600; }
+    .uplinks .sep { color: var(--gray); margin: 0 4px; }
+    .uplinks.leak .idle { color: var(--orange); }
+    .leak-badge {
+      font-size: 10px;
+      background: rgba(255, 98, 29, 0.18);
+      color: var(--orange);
+      border-radius: 4px;
+      padding: 1px 5px;
+      margin-left: 6px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      white-space: nowrap;
+    }
+    tr.stale .uplinks .idle, tr.stale .uplinks .active { color: var(--gray); }
+    tr.stale .uplinks.leak .idle { color: var(--orange); }
+    .lastuse { color: var(--gray-lt); font-size: 12px; }
+    .lastuse.fresh { color: var(--cyan); }
+    tr.stale .lastuse { color: var(--gray); }
 
     tr.section-sep td {
       padding: 14px 12px 6px;
@@ -236,6 +277,13 @@
       padding: 20px 0;
       display: none;
     }
+
+    #totals {
+      margin-top: 14px;
+      font-size: 12px;
+      color: var(--gray);
+    }
+    #totals b { color: var(--gray-lt); font-weight: 600; }
   </style>
 </head>
 <body>
@@ -261,12 +309,16 @@
 </div>
 
 <div id="dashboard">
+  <div class="table-wrap">
   <table id="tbl">
     <thead>
       <tr>
         <th>Device</th>
+        <th>Client</th>
         <th>Status</th>
         <th>Since</th>
+        <th title="Uplink sockets held by the hub for this device: idle in the pool · actively carrying a proxied connection · browser requests waiting for one">Uplinks</th>
+        <th title="Last time bytes moved through one of this device's tunnels">Last Use</th>
         <th class="num">Connections</th>
         <th class="num">Requests</th>
         <th class="num">In</th>
@@ -275,12 +327,17 @@
     </thead>
     <tbody id="tbl-body"></tbody>
   </table>
+  </div>
   <div id="empty-msg">No devices seen yet</div>
+  <div id="totals"></div>
 </div>
 
 <script>
 (function () {
   var ws = null;
+  var COLS = 10;
+  var HEALTHY_IDLE = 7;      // a healthy client keeps this many idle uplinks
+  var LEAK_IDLE = HEALTHY_IDLE * 2;  // above this, highlight as a probable leak
 
   var authDiv    = document.getElementById('auth');
   var dashboard  = document.getElementById('dashboard');
@@ -290,6 +347,7 @@
   var headerTs   = document.getElementById('header-ts');
   var serverInfo = document.getElementById('server-info');
   var wsDot      = document.getElementById('ws-dot');
+  var totalsDiv  = document.getElementById('totals');
 
   var logoutBtn    = document.getElementById('logout-btn');
   var hostnameInfo = document.getElementById('hostname-info');
@@ -418,6 +476,8 @@
     var s = Math.floor(ms / 1000);
     var m = Math.floor(s / 60); s = s % 60;
     var h = Math.floor(m / 60); m = m % 60;
+    var d = Math.floor(h / 24);
+    if (d > 0) { h = h % 24; return d + 'd ' + h + 'h'; }
     if (h > 0) return h + 'h ' + m + 'm';
     if (m > 0) return m + 'm ' + s + 's';
     return s + 's';
@@ -435,9 +495,51 @@
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
 
+  function dashCells(n) {
+    var s = '';
+    for (var i = 0; i < n; i++) s += '<td class="num">—</td>';
+    return s;
+  }
+
   var RESTART_TOLERANCE_MS = 60 * 1000;
 
-  function makeRow(name, rec, serverStartAt) {
+  function clientCell(rec) {
+    if (rec.clientVersion) {
+      return '<td><span class="client-ver">' + esc(rec.clientVersion) + '</span></td>';
+    }
+    if (rec.connected) {
+      return '<td><span class="legacy-badge" title="No version header: a client from before 2.1.0. It refills uplinks without backoff and cannot be capped; update it.">legacy</span></td>';
+    }
+    return '<td><span class="client-ver">—</span></td>';
+  }
+
+  function uplinksCell(rec, pool) {
+    var idle    = pool ? (pool.pool_size || 0) : 0;
+    var active  = rec ? (rec.activeTunnels || 0) : 0;
+    var waiting = pool ? (pool.waiting_queue_length || 0) : 0;
+    var leak = idle > LEAK_IDLE;
+    var html = '<span class="uplinks' + (leak ? ' leak' : '') + '" title="idle in pool · active tunnels' + (waiting ? ' · requests waiting' : '') + '">'
+      + '<span class="idle">' + idle + '</span> idle'
+      + '<span class="sep">·</span>'
+      + '<span class="active">' + active + '</span> active';
+    if (waiting) {
+      html += '<span class="sep">·</span><span class="waiting-n">' + waiting + '</span> waiting';
+    }
+    html += '</span>';
+    if (leak) {
+      html += '<span class="leak-badge" title="Far more idle uplinks than a healthy client keeps (' + HEALTHY_IDLE + '). Probably leaked pools from an old client; restart the device.">leak?</span>';
+    }
+    return '<td>' + html + '</td>';
+  }
+
+  function lastUseCell(rec) {
+    if (!rec || !rec.lastActivityAt) return '<td><span class="lastuse">—</span></td>';
+    var ago = Date.now() - rec.lastActivityAt;
+    var cls = ago < 60 * 1000 ? 'lastuse fresh' : 'lastuse';
+    return '<td><span class="' + cls + '" title="' + esc(fmtTime(rec.lastActivityAt)) + '">' + esc(fmtAgo(rec.lastActivityAt)) + '</span></td>';
+  }
+
+  function makeRow(name, rec, pool, serverStartAt) {
     var tr = document.createElement('tr');
     var statusHtml, sinceHtml;
 
@@ -464,8 +566,11 @@
 
     tr.innerHTML =
       '<td><span class="dev-name">' + esc(name) + '</span></td>' +
+      clientCell(rec) +
       '<td>' + statusHtml + '</td>' +
       '<td>' + sinceHtml + '</td>' +
+      uplinksCell(rec, pool) +
+      lastUseCell(rec) +
       '<td class="num">' + rec.connectionCount.toLocaleString() + '</td>' +
       '<td class="num">' + rec.requestCount.toLocaleString() + '</td>' +
       '<td class="num">' + esc(fmtBytes(rec.bytesIn)) + '</td>' +
@@ -477,7 +582,7 @@
   function makeSepRow(label) {
     var tr = document.createElement('tr');
     tr.className = 'section-sep';
-    tr.innerHTML = '<td colspan="7">' + esc(label) + '</td>';
+    tr.innerHTML = '<td colspan="' + COLS + '">' + esc(label) + '</td>';
     return tr;
   }
 
@@ -487,12 +592,10 @@
     var sessions = rec.count === 1 ? '1 session' : rec.count + ' sessions';
     tr.innerHTML =
       '<td><span class="dev-name">' + esc(name) + '</span></td>' +
+      '<td class="num">—</td>' +
       '<td><span class="status-fail">✗ gave up (' + esc(sessions) + ')</span></td>' +
       '<td><span class="since">' + esc(fmtAgo(rec.lastAt)) + '</span></td>' +
-      '<td class="num">—</td>' +
-      '<td class="num">—</td>' +
-      '<td class="num">—</td>' +
-      '<td class="num">—</td>';
+      dashCells(COLS - 4);
     return tr;
   }
 
@@ -504,12 +607,25 @@
       + (isNew ? '<span class="new-badge">never seen</span>' : '');
     tr.innerHTML =
       '<td>' + nameCellHtml + '</td>' +
+      '<td class="num">—</td>' +
       '<td><span class="status-wait">◌ ' + esc(countStr) + '</span></td>' +
       '<td><span class="since">—</span></td>' +
+      dashCells(COLS - 4);
+    return tr;
+  }
+
+  // uplinks arriving for a name that has no device record (never registered since restart)
+  function makeOrphanPoolRow(name, pool) {
+    var tr = document.createElement('tr');
+    tr.className = 'stale';
+    tr.innerHTML =
+      '<td><span class="dev-name">' + esc(name) + '</span></td>' +
       '<td class="num">—</td>' +
-      '<td class="num">—</td>' +
-      '<td class="num">—</td>' +
-      '<td class="num">—</td>';
+      '<td><span class="status-off">○ not registered</span></td>' +
+      '<td><span class="since">—</span></td>' +
+      uplinksCell(null, pool) +
+      '<td><span class="lastuse">—</span></td>' +
+      dashCells(COLS - 6);
     return tr;
   }
 
@@ -523,8 +639,16 @@
       hostnameSet = true;
     }
 
+    var pools = snapshot.pools || {};
+
     if (snapshot.serverStartAt) {
-      serverInfo.textContent = 'Server started ' + fmtAgo(snapshot.serverStartAt);
+      var info = 'Server started ' + fmtAgo(snapshot.serverStartAt);
+      if (snapshot.uplinkCap) {
+        var c = snapshot.uplinkCap;
+        info += ' · uplink cap ' + (c.cappable ? c.cappable : 'none') + ' per device';
+        info += ' (legacy clients: ' + (c.legacy ? c.legacy : 'log only') + ')';
+      }
+      serverInfo.textContent = info;
     }
 
     var cutoff = new Date(); cutoff.setHours(0,0,0,0);
@@ -541,6 +665,16 @@
       }
     }
 
+    // pools whose name has no device record at all
+    var orphanPools = [];
+    var poolNames = Object.keys(pools).sort();
+    for (var p = 0; p < poolNames.length; p++) {
+      var pn = poolNames[p];
+      if (!snapshot.devices[pn] && pools[pn] && (pools[pn].pool_size > 0 || pools[pn].waiting_queue_length > 0)) {
+        orphanPools.push(pn);
+      }
+    }
+
     var tbody   = document.getElementById('tbl-body');
     var emptyMsg = document.getElementById('empty-msg');
     tbody.innerHTML = '';
@@ -549,13 +683,13 @@
 
     var waitingNames = Object.keys(snapshot.waiting || {}).sort();
 
-    if (active.length === 0 && waitingNames.length === 0 && old.length === 0) {
+    if (active.length === 0 && waitingNames.length === 0 && old.length === 0 && orphanPools.length === 0) {
       emptyMsg.style.display = '';
     } else {
       emptyMsg.style.display = 'none';
 
       for (var j = 0; j < active.length; j++) {
-        tbody.appendChild(makeRow(active[j], snapshot.devices[active[j]], serverStartAt));
+        tbody.appendChild(makeRow(active[j], snapshot.devices[active[j]], pools[active[j]], serverStartAt));
       }
 
       if (waitingNames.length > 0) {
@@ -571,7 +705,14 @@
       if (old.length > 0) {
         tbody.appendChild(makeSepRow('Previously Connected'));
         for (var k = 0; k < old.length; k++) {
-          tbody.appendChild(makeRow(old[k], snapshot.devices[old[k]], serverStartAt));
+          tbody.appendChild(makeRow(old[k], snapshot.devices[old[k]], pools[old[k]], serverStartAt));
+        }
+      }
+
+      if (orphanPools.length > 0) {
+        tbody.appendChild(makeSepRow('Uplinks From Unregistered Devices'));
+        for (var o = 0; o < orphanPools.length; o++) {
+          tbody.appendChild(makeOrphanPoolRow(orphanPools[o], pools[orphanPools[o]]));
         }
       }
 
@@ -584,6 +725,24 @@
         }
       }
     }
+
+    // totals across every pool the hub holds — this is what fills conntrack and memory
+    var totIdle = 0, totActive = 0, totWaiting = 0, live = 0, legacy = 0;
+    for (var q = 0; q < poolNames.length; q++) {
+      totIdle    += pools[poolNames[q]].pool_size || 0;
+      totWaiting += pools[poolNames[q]].waiting_queue_length || 0;
+    }
+    for (var r = 0; r < names.length; r++) {
+      var d = snapshot.devices[names[r]];
+      totActive += d.activeTunnels || 0;
+      if (d.connected) { live++; if (!d.clientVersion) legacy++; }
+    }
+    totalsDiv.innerHTML =
+      '<b>' + live + '</b> device' + (live === 1 ? '' : 's') + ' live' +
+      (legacy ? ' (<b>' + legacy + '</b> legacy)' : '') +
+      ' · hub holds <b>' + (totIdle + totActive).toLocaleString() + '</b> uplink sockets: ' +
+      '<b>' + totIdle.toLocaleString() + '</b> idle, <b>' + totActive.toLocaleString() + '</b> active' +
+      (totWaiting ? ', <b>' + totWaiting + '</b> requests waiting' : '');
   }
 
   // initial connection — no password sent; server responds immediately if no auth required

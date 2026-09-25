@@ -4,6 +4,11 @@ import WaitServer from './WaitServer';
 
 const log = {...console};
 
+// anything with a getStatus() returning { pools: {devicename: {pool_size, waiting_queue_length}}, ... }
+interface PoolStatusSource {
+    getStatus(): any;
+}
+
 
 export default class StatusServer {
     private clients: Set<any>;
@@ -11,12 +16,14 @@ export default class StatusServer {
     private hostnames: string[];
     tracker: DeviceTracker;
     waitServer: WaitServer | null;
+    poolSource: PoolStatusSource | null;
 
-    constructor(tracker: DeviceTracker, waitServer: WaitServer | null, password: string | null, hostnames: string[] = []) {
+    constructor(tracker: DeviceTracker, waitServer: WaitServer | null, password: string | null, hostnames: string[] = [], poolSource: PoolStatusSource | null = null) {
         this.tracker    = tracker;
         this.waitServer = waitServer;
         this.password   = password || null;
         this.hostnames  = hostnames;
+        this.poolSource = poolSource;
         this.clients    = new Set();
 
         tracker.onUpdate = () => this.broadcast();
@@ -53,6 +60,15 @@ export default class StatusServer {
         if (this.waitServer) {
             snap.waiting        = this.waitServer.getWaiters();
             snap.failedAttempts = this.waitServer.getFailedAttempts();
+        }
+        if (this.poolSource) {
+            const status = this.poolSource.getStatus() || {};
+            snap.pools     = status.pools || {};
+            snap.uplinkCap = {
+                cappable: status.max_uplinks_per_device || 0,
+                legacy:   status.max_uplinks_legacy || 0,
+                warnAt:   status.warn_uplinks_per_device || 0,
+            };
         }
         return snap;
     }

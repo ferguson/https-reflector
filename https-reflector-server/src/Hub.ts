@@ -49,8 +49,8 @@ export default class Hub {
         const dataDir = options.data_dir || DEFAULT_DATA_DIR;
         this.deviceTracker = new DeviceTracker(dataDir);
         this.waitServer    = new WaitServer(this.deviceTracker);
-        this.statusServer  = new StatusServer(this.deviceTracker, this.waitServer, options.status_password || null, this.hostnames);
         this.connector_manager = new ConnectorManager(this.deviceTracker);
+        this.statusServer  = new StatusServer(this.deviceTracker, this.waitServer, options.status_password || null, this.hostnames, this.connector_manager);
     }
 
 
@@ -68,11 +68,35 @@ export default class Hub {
             serveClient: false,
         };
         this.io = new SocketIOServer(this.io_http_server, io_opts);
+        // One persistent handler. The old per-upgrade io.once('connection') was a
+        // race: two devices handshaking at once both fired on the first connection,
+        // binding both names to one socket and leaving the other device without a
+        // 'proceed' (it then sat there forever).
+        this.io.on('connection', (io_socket) => this.handleIOConnection(io_socket));
     }
 
 
     shutdown(): void {
         this.deviceTracker.shutdown();
+    }
+
+
+    handleIOConnection(io_socket: any): void {
+        let devicename: string;
+        if (this.options.use_vhosts) {
+            let host = io_socket.handshake && io_socket.handshake.headers && io_socket.handshake.headers.host;
+            let hostname = this.getHostnameFromHost(host) || '';
+            devicename = this.getDevicenameFromHostname(hostname);
+            if (!devicename) {
+                log.warn('socket.io connector with no devicename in host header:', host);
+                io_socket.disconnect(true);
+                return;
+            }
+        } else {
+            devicename = 'default';
+        }
+        log.debug('the devicename', devicename);
+        this.connector_manager.addIOConnector(devicename, io_socket, io_socket.request);
     }
 
 
@@ -102,20 +126,7 @@ export default class Hub {
             if (p.startsWith(HUB_PREFIX + '/socket.io/') || p.startsWith(LEGACY_HUB_PREFIX + '/socket.io/')) {
                 socket.devicename = devicename;
                 this.io.engine.handleUpgrade(req, socket, head);
-                this.io.once('connection', (io_socket) => {
-                    let host = io_socket.handshake && io_socket.handshake.headers && io_socket.handshake.headers.host;
-                    let hostname = this.getHostnameFromHost(host);
-                    if (this.options.use_vhosts) {
-                        let devicename_now = this.getDevicenameFromHostname(hostname);
-                        if (!devicename_now) {
-                            throw new Error('we lost the devicename');
-                        } else if (devicename_now !== devicename) {
-                            log.warn('the devicename does not match');
-                        }
-                    }
-                    log.debug('the devicename', devicename);
-                    this.connector_manager.addIOConnector(devicename, io_socket, req);
-                });
+                // registration happens in handleIOConnection() once socket.io finishes its handshake
             } else {
                 this.ws_server.handleUpgrade(req, socket, head, (ws) => {
                     log.debug('ws created with path', p, 'and devicename', devicename);
@@ -130,6 +141,7 @@ export default class Hub {
                         this.waitServer.addWaiter(devicename, ws);
                     } else {
                         log.error('ignored unknown ws stream path', p);
+                        ws.close();
                     }
                 });
             }
@@ -143,14 +155,18 @@ export default class Hub {
 
         if (!devicename) {
             // not *.some-https-reflector-server.org
-            res.error(404);
+            res.statusCode = 404;
+            res.end();
         } else {
             // *.some-https-reflector-server.org requests only
             await new Promise((resolve) => process.nextTick(resolve));
             let uplink_exists = this.connector_manager.uplinkExists(devicename);
             if (isHubPath(p) || (p === '/' && !uplink_exists)) {
                 log.debug('passing request for', p, 'to express.static');
-                this.static_server(req, res, () => {});
+                this.static_server(req, res, () => { res.statusCode = 404; res.end(); });
+            } else {
+                res.statusCode = 404;
+                res.end();
             }
         }
     }
@@ -215,7 +231,25 @@ export default class Hub {
         log.debug('req.url', req.url);
         let ws = await this.connector_manager.getUplinkWS(devicename);
         if (!ws) {
-            socket.destroy();
+            // the device is registered but supplied no uplink socket in time
+            if (!head && socket.writable && !socket.destroyed) {
+                let body = 'The device is connected to the reflector but did not answer in time.\n';
+                socket.end(
+                    'HTTP/1.1 504 Gateway Timeout\r\n' +
+                    'Content-Type: text/plain\r\n' +
+                    'Content-Length: ' + Buffer.byteLength(body) + '\r\n' +
+                    'Connection: close\r\n' +
+                    '\r\n' + body
+                );
+            } else {
+                socket.destroy();
+            }
+            return;
+        }
+        if (socket.destroyed) {
+            // the browser gave up while we waited; return the uplink unused
+            log.debug('client socket gone before an uplink arrived');
+            ws.destroy();
             return;
         }
 
@@ -224,8 +258,10 @@ export default class Hub {
         socket.on('data', (chunk: Buffer) => this.deviceTracker.addBytes(devicename, chunk.length, 0));
         ws.on('data',     (chunk: Buffer) => this.deviceTracker.addBytes(devicename, 0, chunk.length));
 
+        this.deviceTracker.tunnelOpened(devicename);
         pump(pump(socket, ws), socket, (err) => {
             if (err) log.debug('hub pump error', err.code);
+            this.deviceTracker.tunnelClosed(devicename);
         });
 
         try {

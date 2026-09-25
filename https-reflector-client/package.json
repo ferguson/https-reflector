@@ -1,6 +1,6 @@
 {
   "name": "https-reflector-client",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ferguson/https-reflector.git"
@@ -11,7 +11,7 @@
   "private": true,
   "main": "build/API.js",
   "scripts": {
-    "build": "rm -rf build; tsc 2>&1 | egrep -v 'node_modules/(socket[.]io|@socket[.]io|socket[.]io-client|engine[.]io-client)/'"
+    "build": "rm -rf build; ./node_modules/.bin/tsc 2>&1 | egrep -v 'node_modules/(socket[.]io|@socket[.]io|socket[.]io-client|engine[.]io-client)/'"
   },
   "dependencies": {
     "commander": "^7",

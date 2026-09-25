@@ -18,6 +18,7 @@ const BUILT_IN_PUBLIC_DIR  = BUILT_IN_STATIC_DIR + '/public';
 const PUBLIC_STATIC_DIR    = process.env.HTTPS_REFLECTOR_PUBLIC_STATIC_DIR || null;
 
 const DEFAULT_CERTIFICATE_DIR  = '/etc/letsencrypt/live/some-https-reflector-server.org';
+const CERT_CHECK_INTERVAL_MS   = 60 * 60 * 1000;  // how often to look for renewed certificate files
 
 const defaults: Partial<WebServerOptions> = {
     bind: '0.0.0.0',
@@ -68,6 +69,7 @@ export default class WebServer {
             web_server_options = Object.assign(web_server_options, credentials);
             web_server = https.createServer(web_server_options);
             use_port = this.options.port || this.options.https_port;
+            this.watchCertificates(web_server as https.Server);
         }
 
         web_server.on('request', (req, res) => this.requestHandler(req, res));
@@ -148,6 +150,34 @@ export default class WebServer {
         let devicename = this.hub.getDevicenameFromHostname(hostname);
         log.debug('devicename', devicename);
         return devicename;
+    }
+
+
+    // Re-read the certificate files when they change on disk (certbot renews
+    // every ~60 days), so a hub that runs for months doesn't keep serving the
+    // cert it read at startup. setSecureContext applies to new connections.
+    watchCertificates(server: https.Server): void {
+        const files = [this.options.private_key_file, this.options.certificate_file, this.options.authority_file];
+        const stamp = () => files.map((f) => {
+            try { return String(fs.statSync(f).mtime.getTime()); } catch (err) { return '?'; }
+        }).join('|');
+        let last = stamp();
+        const timer = setInterval(() => {
+            let now = stamp();
+            if (now === last) return;
+            last = now;
+            try {
+                (server as any).setSecureContext({
+                    key:  fs.readFileSync(this.options.private_key_file),
+                    cert: fs.readFileSync(this.options.certificate_file),
+                    ca:   fs.readFileSync(this.options.authority_file),
+                });
+                log.log('certificate files changed on disk; reloaded');
+            } catch (err) {
+                log.error('certificate reload failed:', err && err.message);
+            }
+        }, CERT_CHECK_INTERVAL_MS);
+        if (timer && (timer as any).unref) (timer as any).unref();
     }
 
 
