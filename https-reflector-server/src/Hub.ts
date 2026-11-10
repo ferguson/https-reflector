@@ -1,6 +1,5 @@
 import http = require('http');
 import path = require('path');
-import pump = require('pump');
 import * as express from 'express';
 import _http_common = require('_http_common');
 //import asyncHandler from 'express-async-handler';
@@ -253,16 +252,9 @@ export default class Hub {
             return;
         }
 
-        // count bytes flowing through this proxied connection
         this.deviceTracker.recordRequest(devicename);
-        socket.on('data', (chunk: Buffer) => this.deviceTracker.addBytes(devicename, chunk.length, 0));
-        ws.on('data',     (chunk: Buffer) => this.deviceTracker.addBytes(devicename, 0, chunk.length));
-
         this.deviceTracker.tunnelOpened(devicename);
-        pump(pump(socket, ws), socket, (err) => {
-            if (err) log.debug('hub pump error', err.code);
-            this.deviceTracker.tunnelClosed(devicename);
-        });
+        this.relay(devicename, socket, ws);
 
         try {
             ws.write(method_line + '\r\n' + header_block_string + '\r\n\r\n');
@@ -273,6 +265,69 @@ export default class Hub {
             log.debug('ws write error in handOff', err.code);
             socket.destroy();
         }
+    }
+
+
+    // Relay bytes between a browser connection and the device's uplink websocket, and
+    // tear the pair down in the right order.
+    //
+    // This used to be pump(pump(socket, ws), socket): one teardown for both directions,
+    // and it lost the tail of big answers. The device closes the uplink as soon as its
+    // local server closes the connection (straight after the answer with Connection:
+    // close, 5 s after it on keep-alive), websocket-stream turns that close into
+    // destroy(), and pump answered by destroying the browser socket as well – with
+    // whatever the hub had read from the uplink but not yet delivered to a slower
+    // browser still sitting in the buffers. A 30 MB album list downloaded at 1.5 MB/s
+    // was cut off two thirds of the way through every time ("transfer closed with N
+    // bytes remaining"), and with Connection: close anything past the first 64 KB was.
+    //
+    // Now the uplink closing ENDS the browser socket, which flushes first, and only the
+    // browser going away destroys the uplink. The browser's write buffer also paces the
+    // uplink (ws pause/resume), so a slow browser no longer makes the hub hold a whole
+    // answer in memory.
+    relay(devicename: string, socket: any, ws: any): void {
+        let raw = ws.socket;   // the ws WebSocket under websocket-stream
+        let tcp = raw && raw._socket;   // and its TCP socket: survives the pool's removeAllListeners()
+        let closed = false;
+        let endBrowser = (why: string) => {
+            if (closed) return;
+            closed = true;
+            log.debug('uplink finished:', why);
+            if (!socket.destroyed) socket.end();   // flushes what we still hold, then FIN
+        };
+
+        // device → browser
+        ws.on('data', (chunk: Buffer) => {
+            this.deviceTracker.addBytes(devicename, 0, chunk.length);
+            if (socket.destroyed || !socket.writable) return;
+            if (!socket.write(chunk) && raw && raw.pause) raw.pause();
+        });
+        socket.on('drain', () => { if (raw && raw.resume) raw.resume(); });
+        ws.on('end',   () => endBrowser('end'));
+        ws.on('close', () => endBrowser('close'));
+        ws.on('error', (err) => {
+            log.debug('uplink error', err && (err.code || err.message));
+            socket.destroy();
+        });
+        // The pool's error handler strips every listener off the websocket (terminateOne),
+        // ours included; the TCP socket under it still tells us when it is gone.
+        if (tcp) tcp.on('close', () => endBrowser('tcp close'));
+
+        // browser → device
+        socket.on('data', (chunk: Buffer) => {
+            this.deviceTracker.addBytes(devicename, chunk.length, 0);
+            if (ws.destroyed) return;
+            if (!ws.write(chunk)) socket.pause();
+        });
+        ws.on('drain', () => socket.resume());
+        socket.on('close', () => {
+            this.deviceTracker.tunnelClosed(devicename);
+            // nobody left to deliver to: drop the uplink outright. A close handshake would
+            // need the (maybe paused) websocket read again, spilling frames into a dead stream.
+            if (raw && raw.terminate) raw.terminate();
+            ws.destroy();
+        });
+        // socket 'error' (attached by the caller) destroys the socket, which lands here as 'close'
     }
 
 
