@@ -19,11 +19,18 @@ const usage = `
   --redirect-port             - change port for redirector to listen on (default 80)
   --use-vhosts                - use <devicename>.<hostname> to route multiple upstream nodes
                                     (requires DNS support)
-  --bind                      - the ip address to bind to (default 0.0.0.0)
+  --bind <address>            - the ip address to bind to (default 0.0.0.0)
   --private-key-file          - privkey.pem file to use for https
   --certificate-file          - cert.pem file to use for https
   --authority-file            - chain.pem file to use for https
-  --status-password <pass>    - password for the status dashboard WebSocket
+  --status-password <pass>    - password for the status dashboard (full access)
+  --dashboard-operators <ids> - comma-separated accounts that may use the dashboard and change things
+  --dashboard-viewers <ids>   - comma-separated accounts that may only look at the dashboard
+  --signin-plugins <files>    - comma-separated dashboard sign-in plugins (see src/DashboardAuth.ts)
+  --oidc-issuer <url>         - an OpenID Connect provider to sign in to the dashboard with
+  --oidc-client-id <id>       - the hub's client id there
+  --oidc-client-secret <s>    - ...and its secret (better in HTTPS_REFLECTOR_OIDC_CLIENT_SECRET)
+  --oidc-label <text>         - the sign-in button's text
   --data-dir <dir>            - directory for persisted device stats (default: server/data)
 `;
 
@@ -38,6 +45,13 @@ export default async function main() {
     const envMap: Record<string, string> = {
         hostname:          'HTTPS_REFLECTOR_HOSTNAME',
         status_password:   'HTTPS_REFLECTOR_STATUS_PASSWORD',
+        dashboard_operators: 'HTTPS_REFLECTOR_DASHBOARD_OPERATORS',
+        dashboard_viewers: 'HTTPS_REFLECTOR_DASHBOARD_VIEWERS',
+        signin_plugins:    'HTTPS_REFLECTOR_SIGNIN_PLUGINS',
+        oidc_issuer:       'HTTPS_REFLECTOR_OIDC_ISSUER',
+        oidc_client_id:    'HTTPS_REFLECTOR_OIDC_CLIENT_ID',
+        oidc_client_secret: 'HTTPS_REFLECTOR_OIDC_CLIENT_SECRET',
+        oidc_label:        'HTTPS_REFLECTOR_OIDC_LABEL',
         data_dir:          'HTTPS_REFLECTOR_DATA_DIR',
         private_key_file:  'HTTPS_REFLECTOR_PRIVATE_KEY_FILE',
         certificate_file:  'HTTPS_REFLECTOR_CERTIFICATE_FILE',

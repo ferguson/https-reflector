@@ -68,6 +68,7 @@ export default class DeviceTracker {
             lastRequestAt: null,
             lastActivityAt: null,
             activeTunnels: 0,
+            archivedAt: null,
         };
     }
 
@@ -78,6 +79,11 @@ export default class DeviceTracker {
         if (!rec) {
             rec = this.newRecord(now);
             this.devices.set(devicename, rec);
+        }
+        if (rec.archivedAt) {
+            // an archived name is back: it isn't old after all
+            rec.archivedAt = null;
+            this.appendEvent({ ts: now, event: 'unarchive', device: devicename, why: 'reconnected' });
         }
         rec.connected = true;
         rec.lastConnectedAt = now;
@@ -147,6 +153,33 @@ export default class DeviceTracker {
     }
 
 
+    // Archiving hides an old name from the dashboard's main list without forgetting it: its
+    // history stays, it can be restored, and it comes back by itself if the device reconnects.
+    // Returns an error message, or null on success.
+    archive(devicename: string): string | null {
+        const rec = this.devices.get(devicename);
+        if (!rec) return `no device named ${devicename}`;
+        if (rec.connected) return `${devicename} is connected right now`;
+        if (rec.archivedAt) return null;
+        rec.archivedAt = Date.now();
+        this.appendEvent({ ts: rec.archivedAt, event: 'archive', device: devicename });
+        this.scheduleSave();
+        this.onUpdate();
+        return null;
+    }
+
+    unarchive(devicename: string): string | null {
+        const rec = this.devices.get(devicename);
+        if (!rec) return `no device named ${devicename}`;
+        if (!rec.archivedAt) return null;
+        rec.archivedAt = null;
+        this.appendEvent({ ts: Date.now(), event: 'unarchive', device: devicename });
+        this.scheduleSave();
+        this.onUpdate();
+        return null;
+    }
+
+
     getSnapshot(): object {
         const devices: Record<string, object> = {};
         for (const [name, rec] of this.devices) {
@@ -164,6 +197,7 @@ export default class DeviceTracker {
                 lastRequestAt:      rec.lastRequestAt,
                 lastActivityAt:     rec.lastActivityAt,
                 activeTunnels:      rec.activeTunnels,
+                archivedAt:         rec.archivedAt,
             };
         }
         return { ts: Date.now(), serverStartAt: this.serverStartAt, devices };
@@ -189,6 +223,7 @@ export default class DeviceTracker {
                 rec.clientVersion      = s.clientVersion      != null ? s.clientVersion      : null;
                 rec.lastRequestAt      = s.lastRequestAt      != null ? s.lastRequestAt      : null;
                 rec.lastActivityAt     = s.lastActivityAt     != null ? s.lastActivityAt     : null;
+                rec.archivedAt         = s.archivedAt         != null ? s.archivedAt         : null;
                 this.devices.set(name, rec);
             }
             log.log(`DeviceTracker: loaded ${this.devices.size} device(s) from ${file}`);
@@ -222,6 +257,7 @@ export default class DeviceTracker {
                 clientVersion:      rec.clientVersion,
                 lastRequestAt:      rec.lastRequestAt,
                 lastActivityAt:     rec.lastActivityAt,
+                archivedAt:         rec.archivedAt,
             };
         }
         const json = JSON.stringify({ savedAt: Date.now(), devices: data }, null, 2);

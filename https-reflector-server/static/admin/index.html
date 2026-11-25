@@ -121,6 +121,22 @@
       cursor: pointer;
     }
     #pw-submit:hover { background: var(--cyan-lt); }
+    #signin-methods { display: flex; flex-direction: column; gap: 10px; align-items: center; }
+    .signin-btn {
+      background: var(--cyan);
+      color: var(--navy);
+      padding: 8px 22px;
+      border-radius: 6px;
+      font-size: 15px;
+      font-weight: 700;
+      text-decoration: none;
+    }
+    .signin-btn:hover { background: var(--cyan-lt); }
+    #auth-or { color: var(--gray); font-size: 12px; display: none; }
+    #auth-note { color: var(--gray-lt); font-size: 13px; display: none; max-width: 420px; text-align: center; }
+    #pw-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+    #who { font-size: 12px; color: var(--gray-lt); }
+    #who .role { color: var(--gray); }
 
     /* ── Dashboard ── */
     #dashboard { display: none; padding: 16px 20px; }
@@ -144,7 +160,7 @@
       text-align: left;
       border-bottom: 1px solid rgba(65,185,195,0.3);
       position: sticky;
-      top: 66px;
+      top: 0;            /* (inside .table-wrap, which scrolls sideways, so it sticks to the table, not the page) */
       z-index: 5;
       white-space: nowrap;
     }
@@ -278,6 +294,36 @@
       display: none;
     }
 
+    .row-btn {
+      font-size: 11px;
+      color: var(--gray);
+      background: none;
+      border: 1px solid transparent;
+      border-radius: 4px;
+      padding: 0 6px;
+      margin-left: 8px;
+      cursor: pointer;
+      font-family: inherit;
+      visibility: hidden;
+    }
+    tr:hover .row-btn, .row-btn:focus { visibility: visible; border-color: var(--gray); }
+    .row-btn:hover { color: var(--white); border-color: var(--white); }
+    tr.archived .row-btn { visibility: visible; border-color: var(--gray); }
+    tr.archived .dev-name { color: var(--gray); font-weight: 400; }
+    tr.archived td { opacity: 0.75; }
+    .section-toggle { cursor: pointer; user-select: none; }
+    .section-toggle:hover { color: var(--white); }
+
+    #notice {
+      display: none;
+      margin-top: 10px;
+      padding: 6px 10px;
+      border: 1px solid var(--orange);
+      border-radius: 4px;
+      color: var(--orange);
+      font-size: 12px;
+    }
+
     #totals {
       margin-top: 14px;
       font-size: 12px;
@@ -297,6 +343,7 @@
   <div class="header-right">
     <span class="ws-dot" id="ws-dot"></span>
     <span id="header-ts">connecting…</span>
+    <span id="who"></span>
     <button id="logout-btn" style="display:none">Logout</button>
   </div>
 </div>
@@ -304,8 +351,13 @@
 <div id="auth">
   <h2>Status Dashboard</h2>
   <div id="auth-error">Incorrect password</div>
-  <input type="password" id="pw-input" placeholder="Password" autocomplete="current-password" />
-  <button id="pw-submit">Connect</button>
+  <div id="auth-note"></div>
+  <div id="signin-methods"></div>
+  <div id="auth-or">or</div>
+  <div id="pw-row">
+    <input type="password" id="pw-input" placeholder="Password" autocomplete="current-password" />
+    <button id="pw-submit">Connect</button>
+  </div>
 </div>
 
 <div id="dashboard">
@@ -329,6 +381,7 @@
   </table>
   </div>
   <div id="empty-msg">No devices seen yet</div>
+  <div id="notice"></div>
   <div id="totals"></div>
 </div>
 
@@ -359,11 +412,66 @@
   var reconnectDelay = 1000;
   var disconnectDisplayTimer = null;
   var lastSnapshot = null;
+  var showArchived = false;
+  var me = null;          // { role, name, via, canEdit } from the hub, once connected
+  var whoSpan = document.getElementById('who');
+  var authNote = document.getElementById('auth-note');
+  var noticeDiv = document.getElementById('notice');
+  var noticeTimer = null;
+
+  function notice(text) {
+    noticeDiv.textContent = text;
+    noticeDiv.style.display = 'block';
+    if (noticeTimer) clearTimeout(noticeTimer);
+    noticeTimer = setTimeout(function () { noticeDiv.style.display = 'none'; }, 8000);
+  }
+
+  function send(cmd) {
+    if (!ws || ws.readyState !== 1) { notice('Not connected to the hub.'); return; }
+    ws.send(JSON.stringify(cmd));
+  }
 
   function setConnected(on) {
     isConnected = on;
     wsDot.className = 'ws-dot' + (on ? ' live' : '');
-    logoutBtn.style.display = on ? '' : 'none';
+    logoutBtn.style.display = on && me && me.via !== 'open' ? '' : 'none';
+    if (!on) whoSpan.textContent = '';
+  }
+
+  function showWho() {
+    if (!me) { whoSpan.textContent = ''; return; }
+    var who = me.name || (me.via === 'password' ? 'password' : '');
+    var role = me.via === 'open' ? 'read-only' : (me.role === 'operator' ? 'operator' : 'viewer (read-only)');
+    whoSpan.innerHTML = (who ? esc(who) + ' · ' : '') + '<span class="role">' + esc(role) + '</span>';
+    logoutBtn.textContent = me.via === 'account' ? 'Sign out' : 'Logout';
+    logoutBtn.style.display = isConnected && me.via !== 'open' ? '' : 'none';
+  }
+
+  // the ways in this hub offers (an older hub has no /admin/auth/me: password only)
+  function setUpAuthPanel() {
+    var x = new XMLHttpRequest();
+    x.open('GET', '/admin/auth/me');
+    x.onload = function () {
+      var info = null;
+      try { info = JSON.parse(x.responseText); } catch (e) {}
+      if (!info || x.status !== 200) return;
+      var box = document.getElementById('signin-methods');
+      box.innerHTML = '';
+      (info.methods || []).forEach(function (m) {
+        var a = document.createElement('a');
+        a.className = 'signin-btn';
+        a.href = m.start;
+        a.textContent = m.label;
+        box.appendChild(a);
+      });
+      document.getElementById('pw-row').style.display = info.password ? '' : 'none';
+      document.getElementById('auth-or').style.display = info.password && info.methods.length ? 'block' : 'none';
+      if (info.user && !info.user.role) {
+        authNote.textContent = 'You are signed in as ' + info.user.ids[0] + ', but that account has no access to this dashboard.';
+        authNote.style.display = 'block';
+      }
+    };
+    x.send();
   }
 
   function showDisconnectedState() {
@@ -388,6 +496,13 @@
   }
 
   function logout() {
+    if (me && me.via === 'account') {
+      var x = new XMLHttpRequest();
+      x.open('POST', '/admin/auth/logout');
+      x.send();
+    }
+    me = null;
+    authNote.style.display = 'none';
     if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
     if (disconnectDisplayTimer) { clearTimeout(disconnectDisplayTimer); disconnectDisplayTimer = null; }
     savedPassword = null;
@@ -422,6 +537,11 @@
       if (ws !== thisWs) return;
       var data;
       try { data = JSON.parse(evt.data); } catch(e) { return; }
+      if (data.you) { me = data.you; showWho(); return; }
+      if (data.reply) {   // the answer to an archive/restore; the new snapshot follows on its own
+        if (!data.ok) notice((data.reply === 'unarchive' ? 'Could not restore ' : 'Could not archive ') + data.name + ': ' + data.error);
+        return;
+      }
       lastSnapshot = data;
       authDiv.style.display   = 'none';
       dashboard.style.display = 'block';
@@ -430,7 +550,15 @@
 
     ws.onclose = function (evt) {
       if (ws !== thisWs) return;
-      if (evt.code === 4401) {
+      if (evt.code === 4400 || evt.code === 4403) {
+        // sign-in needed (no password here to fall back on), or the page isn't the hub's own
+        if (disconnectDisplayTimer) { clearTimeout(disconnectDisplayTimer); disconnectDisplayTimer = null; }
+        setConnected(false);
+        authDiv.style.display   = '';
+        dashboard.style.display = 'none';
+        headerTs.textContent = evt.code === 4403 ? 'refused' : 'sign in';
+        if (evt.code === 4403) { authNote.textContent = 'The hub refused this page (it is not the hub\'s own dashboard address).'; authNote.style.display = 'block'; }
+      } else if (evt.code === 4401) {
         // auth failure — don't reconnect, show password prompt
         if (disconnectDisplayTimer) { clearTimeout(disconnectDisplayTimer); disconnectDisplayTimer = null; }
         savedPassword = null;
@@ -452,6 +580,18 @@
   }
 
   logoutBtn.onclick = logout;
+
+  document.getElementById('tbl-body').addEventListener('click', function (e) {
+    var t = e.target;
+    if (t.classList && t.classList.contains('section-toggle')) {
+      showArchived = !showArchived;
+      if (lastSnapshot) render(lastSnapshot);
+      return;
+    }
+    var name = t.getAttribute && t.getAttribute('data-name');
+    var action = t.getAttribute && t.getAttribute('data-action');
+    if (name && action) send({ action: action, name: name });
+  });
 
   pwSubmit.onclick = function () {
     authError.style.display = 'none';
@@ -539,7 +679,17 @@
     return '<td><span class="' + cls + '" title="' + esc(fmtTime(rec.lastActivityAt)) + '">' + esc(fmtAgo(rec.lastActivityAt)) + '</span></td>';
   }
 
-  function makeRow(name, rec, pool, serverStartAt) {
+  function rowButton(name, rec, canEdit) {
+    if (!canEdit || rec.connected) return '';
+    var action = rec.archivedAt ? 'unarchive' : 'archive';
+    var label  = rec.archivedAt ? 'Restore' : 'Archive';
+    var title  = rec.archivedAt
+      ? 'Put this name back in the main list'
+      : 'Move this name to the Archived section. Nothing is deleted, and it comes back by itself if the device reconnects.';
+    return '<button class="row-btn" data-action="' + action + '" data-name="' + esc(name) + '" title="' + esc(title) + '">' + label + '</button>';
+  }
+
+  function makeRow(name, rec, pool, serverStartAt, canEdit) {
     var tr = document.createElement('tr');
     var statusHtml, sinceHtml;
 
@@ -556,7 +706,7 @@
         sinceHtml = '<span class="since">—</span>';
       }
     } else {
-      tr.className = 'stale';
+      tr.className = rec.archivedAt ? 'stale archived' : 'stale';
       var lastSeen = rec.lastDisconnectedAt ? fmtAgo(rec.lastDisconnectedAt) : 'never';
       statusHtml = '<span class="status-off">○ ' + esc(lastSeen) + '</span>';
       sinceHtml  = rec.lastConnectedAt
@@ -565,7 +715,7 @@
     }
 
     tr.innerHTML =
-      '<td><span class="dev-name">' + esc(name) + '</span></td>' +
+      '<td><span class="dev-name">' + esc(name) + '</span>' + rowButton(name, rec, canEdit) + '</td>' +
       clientCell(rec) +
       '<td>' + statusHtml + '</td>' +
       '<td>' + sinceHtml + '</td>' +
@@ -655,10 +805,13 @@
     var cut = cutoff.getTime();
 
     var names = Object.keys(snapshot.devices).sort();
-    var active = [], old = [];
+    var active = [], old = [], archived = [];
+    var canEdit = !!(me && me.canEdit);
     for (var i = 0; i < names.length; i++) {
       var rec = snapshot.devices[names[i]];
-      if (rec.connected || (rec.lastConnectedAt && rec.lastConnectedAt >= cut)) {
+      if (rec.archivedAt && !rec.connected) {
+        archived.push(names[i]);
+      } else if (rec.connected || (rec.lastConnectedAt && rec.lastConnectedAt >= cut)) {
         active.push(names[i]);
       } else {
         old.push(names[i]);
@@ -683,13 +836,13 @@
 
     var waitingNames = Object.keys(snapshot.waiting || {}).sort();
 
-    if (active.length === 0 && waitingNames.length === 0 && old.length === 0 && orphanPools.length === 0) {
+    if (active.length === 0 && waitingNames.length === 0 && old.length === 0 && orphanPools.length === 0 && archived.length === 0) {
       emptyMsg.style.display = '';
     } else {
       emptyMsg.style.display = 'none';
 
       for (var j = 0; j < active.length; j++) {
-        tbody.appendChild(makeRow(active[j], snapshot.devices[active[j]], pools[active[j]], serverStartAt));
+        tbody.appendChild(makeRow(active[j], snapshot.devices[active[j]], pools[active[j]], serverStartAt, canEdit));
       }
 
       if (waitingNames.length > 0) {
@@ -705,7 +858,7 @@
       if (old.length > 0) {
         tbody.appendChild(makeSepRow('Previously Connected'));
         for (var k = 0; k < old.length; k++) {
-          tbody.appendChild(makeRow(old[k], snapshot.devices[old[k]], pools[old[k]], serverStartAt));
+          tbody.appendChild(makeRow(old[k], snapshot.devices[old[k]], pools[old[k]], serverStartAt, canEdit));
         }
       }
 
@@ -713,6 +866,17 @@
         tbody.appendChild(makeSepRow('Uplinks From Unregistered Devices'));
         for (var o = 0; o < orphanPools.length; o++) {
           tbody.appendChild(makeOrphanPoolRow(orphanPools[o], pools[orphanPools[o]]));
+        }
+      }
+
+      if (archived.length > 0) {
+        var sep = makeSepRow('');
+        sep.firstChild.innerHTML = '<span class="section-toggle">' + (showArchived ? '▾' : '▸') + ' Archived (' + archived.length + ')</span>';
+        tbody.appendChild(sep);
+        if (showArchived) {
+          for (var a = 0; a < archived.length; a++) {
+            tbody.appendChild(makeRow(archived[a], snapshot.devices[archived[a]], pools[archived[a]], serverStartAt, canEdit));
+          }
         }
       }
 
@@ -745,7 +909,9 @@
       (totWaiting ? ', <b>' + totWaiting + '</b> requests waiting' : '');
   }
 
-  // initial connection — no password sent; server responds immediately if no auth required
+  // initial connection — no password sent; the hub answers at once if this browser is signed
+  // in or the dashboard is open, and otherwise waits for the password
+  setUpAuthPanel();
   connect(null);
 })();
 </script>

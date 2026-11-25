@@ -3,7 +3,11 @@ import { WSPool } from 'https-reflector-client';
 const log = {...console};
 log.debug = ()=>{};
 
-const WAITING_QUEUE_MAX = 50;
+// How many browser requests may wait for an uplink socket at once. One page
+// load of Otto asks for well over 100 things together (scripts, then two sizes
+// of every cover), and a device's pool is only 7-10 sockets, so 50 was
+// overflowing on an ordinary first visit.
+const WAITING_QUEUE_MAX = 1000;
 // How long a browser request waits for the device to supply an uplink socket
 // before the hub gives up (and answers 504). Used to be forever.
 const GRAB_TIMEOUT_MS = 20 * 1000;
@@ -44,6 +48,13 @@ export default class HubWSPool extends WSPool {
             return super.grabOne();
         } else {
             // we wait for more websockets here
+            if (this.waiting_queue.length >= WAITING_QUEUE_MAX) {
+                // Turn away the newcomer, never someone already waiting: the
+                // oldest waiters are the page's scripts, and losing one of
+                // those breaks the whole page (it used to eject the oldest).
+                log.warn(`[${this.devicename}] waiting queue is full (${WAITING_QUEUE_MAX}), refusing this request`);
+                return null;
+            }
             log.info(`[${this.devicename}] waiting for uplink sockets, waiting queue length is ${this.waiting_queue.length}`);
             ws = await new Promise<any>((resolve) => {
                 let timer: any = null;
@@ -59,11 +70,6 @@ export default class HubWSPool extends WSPool {
                 }, GRAB_TIMEOUT_MS);
                 this.waiting_queue.push(waiter);
             });
-            while (this.waiting_queue.length > WAITING_QUEUE_MAX) {
-                log.debug('ejecting a connection from the waiting pool');
-                let resolve = this.waiting_queue.shift();
-                resolve(null);  // no ws for you!
-            }
         }
         // if (!ws) {
         //     throw new Error('something went very wrong with the hub ws pool!');

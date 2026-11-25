@@ -1,6 +1,5 @@
 import net = require('net');
 import stream = require('stream');
-import pump = require('pump');
 import WebSocketStream = require('websocket-stream');
 import { PassThrough } from 'stream';
 
@@ -35,14 +34,29 @@ class UplinkWS {
             log.warn('uplink ws error', err.code || err.message);
         });
 
-        // this only works because we write the headers all-at-once on the other end?
-        this.ws.once('data', (data: Buffer) => {
-            this.handleData(data);
-        });
+        // The hub sends the request's method line and headers as one websocket message, and
+        // anything after it (a request body, an upgraded connection's first bytes) as later
+        // messages. Those can arrive before the local connection is open, so keep them until
+        // then: before 2.2.0 they were emitted to no listener and lost, which is why the hub
+        // still makes older clients ask for a body with 100 Continue.
+        let early: Buffer[] | null = null;
+        let onData = (data: Buffer) => {
+            if (early === null) {
+                early = [];
+                this.handleData(data, early, () => this.ws.removeListener('data', onData));
+            } else {
+                early.push(data);
+            }
+        };
+        this.ws.on('data', onData);
     }
 
 
-    handleData(data: Buffer): void {
+    // `early` collects the messages that arrive after the headers while the local connection
+    // opens; `stopCollecting` ends that, right before the pipe takes over.
+    handleData(data: Buffer, early: Buffer[] = [], stopCollecting: () => void = () => {}): void {
+        // Only the header block is used from this first message. Hubs older than 2026-11-23
+        // end it with a stray extra CRLF, so nothing after the blank line may be passed on.
         let header_block = new HeaderBlock();
         header_block.addFromString(data.toString(), true);
 
@@ -71,10 +85,12 @@ class UplinkWS {
             socket.on('connect', () => {
                 let headers_string = header_block.toHeadersString(false);
                 socket.write(headers_string);
-                //socket.pipe(ws).pipe(socket);  // using pump instead
-                pump(pump(this.ws, socket), this.ws, (err) => {
-                    if (err) log.debug('uplink pump error', err.code);
-                });
+                stopCollecting();   // relay()'s pipes listen from here on; nothing in between
+                for (let chunk of early) {
+                    socket.write(chunk);
+                }
+                early.length = 0;
+                this.relay(socket);
             });
 
             socket.on('error', (err) => {
@@ -82,6 +98,34 @@ class UplinkWS {
                 this.ws.destroy();
             });
         }
+    }
+
+
+    // Relay between the local server and the hub, and tear the pair down in the right order.
+    //
+    // This used to be pump(pump(ws, socket), ws), which lost the tail of answers. With
+    // Connection: close (which every request through a front end with keep-alive off
+    // carries), the local server closes its connection right after answering; the inner pump
+    // saw that as the end of the pipeline and destroyed the websocket, and websocket-stream's
+    // destroy() closes the websocket at once, dropping whatever it still held to send. Over
+    // a real network that is often the last few KB to tens of KB: the answer arrives cut
+    // off. It never showed on one machine, where the buffers empty instantly. The hub had
+    // the same bug, fixed the same way (Hub.relayFromDevice).
+    //
+    // Now each side's END is passed on as an end, which flushes first (the websocket sends
+    // its close frame after the last data), and only an error, or the other side going away
+    // entirely, destroys.
+    relay(socket: net.Socket): void {
+        let ws: any = this.ws;
+        ws.pipe(socket);    // hub → local server; the hub ending the uplink ends the connection
+        socket.pipe(ws);    // local server → hub; the server closing ends the uplink, gracefully
+        socket.on('close', (had_error: boolean) => {
+            if (had_error) ws.destroy();    // the local server died mid-answer: let the hub know
+        });
+        ws.on('close', () => {
+            // the hub is gone (the browser left), or our own graceful close has completed
+            if (!socket.destroyed) socket.destroy();
+        });
     }
 }
 

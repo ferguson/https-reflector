@@ -134,6 +134,7 @@ export default class ConnectorManager {
                 log.warn(`[${devicename}] holds ${size} idle uplinks from a legacy client (${version || 'no version header'}); it is leaking pools and needs a restart, and cannot be capped safely until it is updated`);
             }
         }
+        ws_stream.client_version = version;   // Hub decides how to send a request body by it
         uplink_pool.addOne(ws_stream);
     }
 

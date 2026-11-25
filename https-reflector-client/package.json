@@ -1,6 +1,6 @@
 {
   "name": "https-reflector-client",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ferguson/https-reflector.git"
@@ -16,7 +16,6 @@
   "dependencies": {
     "commander": "^7",
     "node-fetch": "^2",
-    "pump": "^3.0.0",
     "snake-camel": "^1.0.9",
     "socket.io-client": "^4.7.5",
     "websocket-stream": "^5.5.2",

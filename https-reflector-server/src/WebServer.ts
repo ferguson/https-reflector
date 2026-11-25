@@ -75,10 +75,9 @@ export default class WebServer {
         web_server.on('request', (req, res) => this.requestHandler(req, res));
         web_server.on('upgrade', (req, socket, head) => this.upgradeHandler(req, socket, head));
 
+        this.hub = new Hub(this.options);
         this.app = express();
         this.addRoutes(this.app);
-
-        this.hub = new Hub(this.options);
         await this.hub.init();
 
         web_server.listen(use_port, this.options.bind, async () => {
@@ -135,6 +134,8 @@ export default class WebServer {
 
 
     addRoutes(app: express.Application): void {
+        // signing in to the dashboard (/admin/auth/...)
+        this.hub.dashboardAuth.routes(app);
         // admin dashboard — always served from the built-in static dir, regardless of PUBLIC_STATIC_DIR
         app.use('/admin', express.static(BUILT_IN_STATIC_DIR + '/admin'));
         // public-facing static files — custom dir takes priority, then built-in public landing page
